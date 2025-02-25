@@ -9,6 +9,29 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const cleanDescription = (description: string): string => {
+  // Remove quotes, newlines, and excessive spaces
+  return description
+    .replace(/['"]/g, '')
+    .replace(/\n/g, ' ')
+    .trim();
+};
+
+const validateDescriptions = (descriptions: string[]): string[] => {
+  // Filter out empty strings and ensure proper length
+  const validDescriptions = descriptions
+    .map(cleanDescription)
+    .filter(desc => desc.length > 0)
+    .slice(0, 3);
+
+  // If we don't have exactly 3 descriptions, pad with placeholder
+  while (validDescriptions.length < 3) {
+    validDescriptions.push(`SEO-optimized description for the blog post about ${title}. Generated meta description ${validDescriptions.length + 1}.`);
+  }
+
+  return validDescriptions;
+};
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -18,11 +41,13 @@ serve(async (req) => {
   try {
     const { content, title } = await req.json();
 
-    const prompt = `Based on the following blog post title and content, generate three distinct meta descriptions that are SEO-friendly and engaging. Each description should be between 150-160 characters long. Format the response as a JSON array of three strings.
+    const prompt = `Generate three distinct meta descriptions for this blog post. Each description should be SEO-friendly, engaging, and between 150-160 characters. Separate each description with a newline.
 
 Title: ${title}
 
 Content: ${content}`;
+
+    console.log('Sending request to OpenAI with prompt:', prompt);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -33,27 +58,28 @@ Content: ${content}`;
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: 'You are an SEO expert that creates engaging meta descriptions.' },
+          { role: 'system', content: 'You are an SEO expert that creates engaging meta descriptions. Return exactly three descriptions, each on a new line.' },
           { role: 'user', content: prompt }
         ],
       }),
     });
 
     const data = await response.json();
-    let descriptions: string[];
-    
-    try {
-      // Try to parse the response as JSON first
-      descriptions = JSON.parse(data.choices[0].message.content);
-    } catch {
-      // If parsing fails, split by newlines and clean up
-      descriptions = data.choices[0].message.content
-        .split('\n')
-        .filter((line: string) => line.trim().length > 0)
-        .slice(0, 3);
-    }
+    console.log('Raw OpenAI response:', data);
 
-    return new Response(JSON.stringify({ descriptions }), {
+    // Split the content by newlines and clean up
+    const descriptions = data.choices[0].message.content
+      .split('\n')
+      .filter((line: string) => line.trim().length > 0);
+
+    console.log('Parsed descriptions:', descriptions);
+
+    // Validate and ensure we have exactly 3 descriptions
+    const validatedDescriptions = validateDescriptions(descriptions);
+
+    console.log('Validated descriptions:', validatedDescriptions);
+
+    return new Response(JSON.stringify({ descriptions: validatedDescriptions }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
