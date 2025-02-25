@@ -39,17 +39,14 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: 'claude-3-sonnet-20240229',
-        max_tokens: 4096,
+        system: systemPrompt,
         messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
           {
             role: 'user',
             content: userPrompt
           }
-        ]
+        ],
+        max_tokens: 4096
       })
     });
 
