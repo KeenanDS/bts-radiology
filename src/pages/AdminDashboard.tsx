@@ -73,39 +73,46 @@ const AdminDashboard = () => {
     setIsGeneratingPost(true);
     
     try {
-      // Simulate post generation with a delay
-      // In a real app, you would call an API here
-      setTimeout(async () => {
-        // Example generated post content
-        const postContent = `# ${topic}\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam euismod, nisl eget aliquam ultricies, nunc nisl aliquet nunc, quis aliquam nisl nunc quis nisl.\n\n## Introduction\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam euismod, nisl eget aliquam ultricies, nunc nisl aliquet nunc, quis aliquam nisl nunc quis nisl.\n\n## Main Content\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam euismod, nisl eget aliquam ultricies, nunc nisl aliquet nunc, quis aliquam nisl nunc quis nisl.`;
-        
-        // Save the post to the database
-        const { data, error } = await supabase
-          .from('blog_posts')
-          .insert([
-            {
-              title: topic,
-              content: postContent,
-              meta_description: additionalInfo || null
-            }
-          ])
-          .select()
-          .single();
-
-        if (error) {
-          throw error;
-        }
-
-        setGeneratedPost(postContent);
-        // Hide the form and show the generated content
-        setShowPostForm(false);
-        setIsGeneratingPost(false);
-        
-        toast({
-          title: "Success",
-          description: "Blog post generated and saved successfully!",
+      // Call the Edge Function to generate the blog post
+      const { data: generationData, error: generationError } = await supabase.functions
+        .invoke('generate-blog-post', {
+          body: JSON.stringify({
+            topic,
+            additionalInfo
+          })
         });
-      }, 2000);
+
+      if (generationError) {
+        throw generationError;
+      }
+
+      const postContent = generationData.content;
+
+      // Save the generated post to the database
+      const { data: savedData, error: saveError } = await supabase
+        .from('blog_posts')
+        .insert([
+          {
+            title: topic,
+            content: postContent,
+            meta_description: additionalInfo || null
+          }
+        ])
+        .select()
+        .single();
+
+      if (saveError) {
+        throw saveError;
+      }
+
+      setGeneratedPost(postContent);
+      setShowPostForm(false);
+      setIsGeneratingPost(false);
+      
+      toast({
+        title: "Success",
+        description: "Blog post generated and saved successfully!",
+      });
     } catch (error) {
       console.error('Error:', error);
       toast({
