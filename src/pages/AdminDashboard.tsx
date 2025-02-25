@@ -1,15 +1,35 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Save, FileText, LayoutDashboard, User, Settings, LogOut } from "lucide-react";
+import { ArrowLeft, Save, FileText, User, Settings, LogOut, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<"create" | "manage">("create");
+  const [topic, setTopic] = useState("");
+
+  const generateTopic = () => {
+    const topics = [
+      "The Future of Artificial Intelligence",
+      "Sustainable Living in Modern Cities",
+      "Digital Privacy in the Age of Social Media",
+      "Remote Work Revolution",
+      "Mindfulness and Mental Health",
+      "Innovation in Education",
+      "Climate Change Solutions",
+      "Emerging Technologies in Healthcare",
+      "The Impact of Blockchain Technology",
+      "Cybersecurity Best Practices"
+    ];
+    const randomTopic = topics[Math.floor(Math.random() * topics.length)];
+    setTopic(randomTopic);
+  };
 
   return (
     <div className="min-h-screen flex bg-[#0a0b17]">
@@ -30,8 +50,8 @@ const AdminDashboard = () => {
             className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/10"
             onClick={() => setCurrentView("create")}
           >
-            <LayoutDashboard className="mr-2 h-5 w-5" />
-            Dashboard
+            <FileText className="mr-2 h-5 w-5" />
+            Generate Post
           </Button>
           
           <Button 
@@ -106,11 +126,32 @@ const AdminDashboard = () => {
                 <CardContent className="space-y-5">
                   <div className="space-y-2">
                     <Label htmlFor="topic" className="text-gray-300">Topic</Label>
-                    <Input 
-                      id="topic" 
-                      placeholder="Enter the blog post topic" 
-                      className="bg-[#1a1f3d] border-[#2a2f4d] focus:border-[#3a3f6d] focus:ring-[#3a3f6d] text-white placeholder:text-gray-500"
-                    />
+                    <div className="flex gap-2">
+                      <Input 
+                        id="topic" 
+                        value={topic}
+                        onChange={(e) => setTopic(e.target.value)}
+                        placeholder="Enter the blog post topic" 
+                        className="bg-[#1a1f3d] border-[#2a2f4d] focus:border-[#3a3f6d] focus:ring-[#3a3f6d] text-white placeholder:text-gray-500"
+                      />
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-10 w-10 bg-[#1a1f3d] hover:bg-[#2a2f5d]"
+                              onClick={generateTopic}
+                            >
+                              <Sparkles className="h-4 w-4 text-gray-400" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Generate a random topic</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
                   </div>
                   
                   <div className="space-y-2">
@@ -151,4 +192,4 @@ const AdminDashboard = () => {
   );
 };
 
-export default AdminDashboard; 
+export default AdminDashboard;
