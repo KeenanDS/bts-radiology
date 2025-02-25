@@ -3,112 +3,149 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, FileText, LayoutDashboard, User, Settings, LogOut } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useState } from "react";
 
 const AdminDashboard = () => {
+  const [currentView, setCurrentView] = useState<"create" | "manage">("create");
+
   return (
-    <div className="min-h-screen bg-[#0a0b17] bg-gradient-to-br from-[#0a0b17] via-[#111936] to-[#0a0b17] p-6 text-gray-300">
-      <div className="max-w-5xl mx-auto space-y-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+    <div className="min-h-screen flex bg-[#0a0b17]">
+      {/* Left Sidebar Navigation */}
+      <div className="w-64 bg-white/5 backdrop-blur-sm border-r border-white/10 flex flex-col h-screen">
+        <div className="p-4 border-b border-white/10">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-black rounded-md flex items-center justify-center">
+              <div className="w-4 h-4 bg-white rounded-sm"></div>
+            </div>
+            <span className="font-bold text-white">Admin Dashboard</span>
+          </div>
+        </div>
+        
+        <div className="flex-1 py-6 px-4 space-y-1">
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/10"
+            onClick={() => setCurrentView("create")}
+          >
+            <LayoutDashboard className="mr-2 h-5 w-5" />
+            Dashboard
+          </Button>
+          
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/10"
+          >
+            <User className="mr-2 h-5 w-5" />
+            Profile
+          </Button>
+          
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/10"
+            onClick={() => setCurrentView("manage")}
+          >
+            <FileText className="mr-2 h-5 w-5" />
+            Manage Posts
+          </Button>
+          
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/10"
+          >
+            <Settings className="mr-2 h-5 w-5" />
+            Settings
+          </Button>
+          
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/10"
+          >
+            <LogOut className="mr-2 h-5 w-5" />
+            Logout
+          </Button>
+        </div>
+        
+        <div className="p-4 border-t border-white/10">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-500 rounded-full overflow-hidden">
+              <img src="https://i.pravatar.cc/100" alt="User" className="w-full h-full object-cover" />
+            </div>
+            <span className="text-white">Manu Arora</span>
+          </div>
+        </div>
+      </div>
+      
+      {/* Main Content Area */}
+      <div className="flex-1 p-6 bg-gradient-to-br from-[#0a0b17] via-[#111936] to-[#0a0b17]">
+        <div className="max-w-4xl mx-auto space-y-8">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold text-white tracking-tight">
+              {currentView === "create" ? "Create New Post" : "Manage Posts"}
+            </h1>
             <Link to="/">
               <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white hover:bg-[#1a1f3d]">
                 <ArrowLeft className="h-5 w-5" />
               </Button>
             </Link>
-            <h1 className="text-3xl font-bold text-white tracking-tight">Admin Dashboard</h1>
+          </div>
+
+          <Separator className="bg-[#2a2f4d] opacity-50" />
+
+          <div className="mt-6">
+            {currentView === "create" && (
+              <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
+                <CardHeader>
+                  <CardTitle className="text-white text-2xl">Generate Blog Post</CardTitle>
+                  <CardDescription className="text-gray-400">
+                    Generate a new blog post by providing a topic and optional additional information.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="topic" className="text-gray-300">Topic</Label>
+                    <Input 
+                      id="topic" 
+                      placeholder="Enter the blog post topic" 
+                      className="bg-[#1a1f3d] border-[#2a2f4d] focus:border-[#3a3f6d] focus:ring-[#3a3f6d] text-white placeholder:text-gray-500"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="additionalInfo" className="text-gray-300">Additional Information (Optional)</Label>
+                    <Textarea 
+                      id="additionalInfo" 
+                      placeholder="Enter any additional information or context for the blog post"
+                      className="min-h-40 bg-[#1a1f3d] border-[#2a2f4d] focus:border-[#3a3f6d] focus:ring-[#3a3f6d] text-white placeholder:text-gray-500"
+                    />
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none">
+                    <Save className="mr-2 h-4 w-4" />
+                    Generate Post
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+            
+            {currentView === "manage" && (
+              <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
+                <CardHeader>
+                  <CardTitle className="text-white text-2xl">Manage Posts</CardTitle>
+                  <CardDescription className="text-gray-400">
+                    View and manage your existing blog posts.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-500">No posts available yet. Create your first post.</p>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
-
-        <Separator className="bg-[#2a2f4d] opacity-50" />
-
-        <Tabs defaultValue="create" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2 bg-[#1a1f3d]">
-            <TabsTrigger 
-              value="create" 
-              className="data-[state=active]:bg-[#2a2f5d] data-[state=active]:text-white"
-            >
-              Create Post
-            </TabsTrigger>
-            <TabsTrigger 
-              value="manage"
-              className="data-[state=active]:bg-[#2a2f5d] data-[state=active]:text-white"
-            >
-              Manage Posts
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="create" className="space-y-4 mt-6">
-            <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
-              <CardHeader>
-                <CardTitle className="text-white text-2xl">Create New Blog Post</CardTitle>
-                <CardDescription className="text-gray-400">
-                  Create a new blog post for your podcast. Fill in the details below.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="space-y-2">
-                  <Label htmlFor="title" className="text-gray-300">Title</Label>
-                  <Input 
-                    id="title" 
-                    placeholder="Enter blog post title" 
-                    className="bg-[#1a1f3d] border-[#2a2f4d] focus:border-[#3a3f6d] focus:ring-[#3a3f6d] text-white placeholder:text-gray-500"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="summary" className="text-gray-300">Summary</Label>
-                  <Textarea 
-                    id="summary" 
-                    placeholder="Enter a brief summary of the blog post"
-                    className="min-h-20 bg-[#1a1f3d] border-[#2a2f4d] focus:border-[#3a3f6d] focus:ring-[#3a3f6d] text-white placeholder:text-gray-500"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="content" className="text-gray-300">Content</Label>
-                  <Textarea 
-                    id="content" 
-                    placeholder="Enter the full content of your blog post"
-                    className="min-h-40 bg-[#1a1f3d] border-[#2a2f4d] focus:border-[#3a3f6d] focus:ring-[#3a3f6d] text-white placeholder:text-gray-500"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="tags" className="text-gray-300">Tags (comma separated)</Label>
-                  <Input 
-                    id="tags" 
-                    placeholder="radiology, career, healthcare" 
-                    className="bg-[#1a1f3d] border-[#2a2f4d] focus:border-[#3a3f6d] focus:ring-[#3a3f6d] text-white placeholder:text-gray-500"
-                  />
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none">
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Post
-                </Button>
-              </CardFooter>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="manage" className="mt-6">
-            <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
-              <CardHeader>
-                <CardTitle className="text-white text-2xl">Manage Posts</CardTitle>
-                <CardDescription className="text-gray-400">
-                  View and manage your existing blog posts.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-500">No posts available yet. Create your first post.</p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
       </div>
     </div>
   );
