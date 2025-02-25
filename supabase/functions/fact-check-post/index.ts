@@ -16,18 +16,28 @@ serve(async (req) => {
 
   try {
     const { content } = await req.json();
+    console.log('Received content for fact-checking:', content.substring(0, 100) + '...');
 
-    // Create a prompt that asks for fact-checking
-    const prompt = `Please fact-check the following blog post content and identify any factual inaccuracies, unsubstantiated claims, or potential misinformation. For each issue identified, provide:
-    1. The specific claim or statement
-    2. Why it might be inaccurate or needs verification
-    3. A suggested correction or clarification
-    
-    Format the response as a JSON array with each issue having 'claim', 'issue', and 'suggestion' fields. If no issues are found, return an empty array.
-    
-    Here's the content to check:
-    
-    ${content}`;
+    // Create a more specific prompt focusing on statistical claims and healthcare/AI predictions
+    const prompt = `As a specialized fact-checker for medical and healthcare content, carefully analyze this blog post for:
+
+1. Statistical claims: Check any percentages, numbers, or quantitative statements
+2. Future predictions: Identify claims about future developments, especially regarding AI in healthcare
+3. Technology impact statements: Verify claims about AI/technology effects on healthcare professions
+4. Healthcare industry trends: Validate statements about medical practice changes
+5. Source verification: Note claims that lack proper attribution or scientific backing
+
+For each potential issue found, provide:
+1. The exact claim made
+2. Why it needs verification (unsupported statistics, unverified predictions, etc.)
+3. A specific suggestion for improvement (e.g., adding source attribution, clarifying time frames, etc.)
+
+Format your response as a JSON array of issues, each with 'claim', 'issue', and 'suggestion' fields.
+If no issues are found, return an empty array.
+
+Here's the content to check:
+
+${content}`;
 
     console.log('Sending request to Perplexity API...');
     
@@ -42,7 +52,21 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: 'You are a precise fact-checker. Focus on factual accuracy and provide clear, actionable feedback.'
+            content: `You are an expert fact-checker specializing in healthcare and medical technology content. Your expertise includes:
+- Medical research methodology
+- Healthcare industry statistics
+- AI/ML implementation in healthcare
+- Evidence-based medicine principles
+- Scientific literature evaluation
+
+Focus on verifying:
+1. Statistical claims require recent, credible sources
+2. Future predictions must be clearly labeled as projections
+3. Technology impact claims need supporting evidence
+4. Industry trend statements require data backing
+5. Professional practice claims need verification
+
+Be particularly vigilant about unsupported statistics and predictions about AI's impact on healthcare professions.`
           },
           {
             role: 'user',
@@ -57,35 +81,48 @@ serve(async (req) => {
     });
 
     const data = await response.json();
-    console.log('Received response from Perplexity API:', data);
+    console.log('Received response from Perplexity API:', JSON.stringify(data, null, 2));
 
-    // Parse the response from the model
+    // Parse the response from the model with enhanced error handling
     let issues = [];
     try {
       const content = data.choices[0].message.content;
       if (content) {
-        // Check if the content is already a JSON array
-        if (content.trim().startsWith('[')) {
+        // First try to parse as direct JSON
+        try {
           issues = JSON.parse(content);
-        } else {
-          // If it's not JSON, try to find and parse any JSON-like structure in the text
+        } catch {
+          // If direct parsing fails, try to find and parse any JSON-like structure
           const jsonMatch = content.match(/\[.*\]/s);
           if (jsonMatch) {
-            issues = JSON.parse(jsonMatch[0]);
+            try {
+              issues = JSON.parse(jsonMatch[0]);
+            } catch (innerError) {
+              console.error('Error parsing JSON from matched content:', innerError);
+              throw new Error('Failed to parse fact-check results');
+            }
+          } else {
+            console.error('No JSON-like structure found in response');
+            throw new Error('Invalid response format from fact-checker');
           }
         }
       }
     } catch (error) {
       console.error('Error parsing fact-check results:', error);
-      issues = [];
+      throw new Error('Failed to process fact-check results');
     }
+
+    console.log(`Identified ${issues.length} potential issues`);
 
     return new Response(JSON.stringify({ issues }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('Error in fact-check-post function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      issues: []
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
