@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -6,6 +7,23 @@ const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+const cleanTitle = (title: string): string => {
+  // Remove markdown symbols, quotes, and extra spaces
+  return title
+    .replace(/[*_`#]/g, '') // Remove markdown formatting
+    .replace(/['"]/g, '') // Remove quotes
+    .replace(/\n/g, ' ') // Replace newlines with spaces
+    .split('.')[0] // Take only the first sentence (the title)
+    .trim();
+};
+
+const validateTitle = (title: string): string => {
+  if (!title) {
+    return 'Latest Trends in Radiology: Your Guide to Career Success';
+  }
+  return title;
 };
 
 serve(async (req) => {
@@ -27,11 +45,19 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: 'You are a specialized content strategist for the radiology and medical imaging industry. Your expertise is generating high-engagement blog topics that appeal to radiologists, imaging technicians, and other medical professionals in diagnostic imaging fields. Your topics should be:\n\n    1. Attention-grabbing with compelling headlines using numbers, questions, or emotional triggers (similar to Buzzfeed-style content)\n    2. SEO-optimized for radiology job searches and career advancement\n    3. Relevant to current trends, challenges, or innovations in the radiology field\n    4. Formatted to drive high click-through rates on LinkedIn and professional networks\n    5. Designed to position a radiology job board as an industry authority'
+            content: `You are a specialized content strategist for the radiology and medical imaging industry. Your task is to generate ONLY a single blog post title. The title should be:
+
+1. Attention-grabbing with compelling words
+2. SEO-optimized for radiology job searches
+3. Relevant to current trends in radiology
+4. Include a number or year when appropriate
+5. No descriptions or additional text
+
+IMPORTANT: Return ONLY the title, nothing else. Do not add any descriptions, markdown, or formatting.`
           },
           {
             role: 'user',
-            content: 'Generate a blog post topic for my radiology job board'
+            content: 'Generate a blog post title for a radiology job board'
           }
         ],
         temperature: 0.7,
@@ -46,10 +72,18 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    const generatedTopic = data.choices[0].message.content;
-    console.log('Successfully generated topic:', generatedTopic);
+    console.log('Raw OpenAI response:', data);
 
-    return new Response(JSON.stringify({ topic: generatedTopic }), {
+    const rawTitle = data.choices[0].message.content;
+    console.log('Raw title:', rawTitle);
+
+    const cleanedTitle = cleanTitle(rawTitle);
+    console.log('Cleaned title:', cleanedTitle);
+
+    const validatedTitle = validateTitle(cleanedTitle);
+    console.log('Validated title:', validatedTitle);
+
+    return new Response(JSON.stringify({ topic: validatedTitle }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
