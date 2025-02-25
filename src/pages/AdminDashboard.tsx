@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Save, FileText, User, Settings, LogOut, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/use-toast";
 import { Toaster } from "@/components/ui/toaster";
@@ -17,7 +16,20 @@ const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<"create" | "manage">("create");
   const [topic, setTopic] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [topicUpdated, setTopicUpdated] = useState(false);
+  const topicInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Effect to show toast after topic is updated
+  useEffect(() => {
+    if (topicUpdated) {
+      toast({
+        title: "Topic Generated",
+        description: "A new topic has been generated successfully.",
+      });
+      setTopicUpdated(false);
+    }
+  }, [topicUpdated, toast]);
 
   const generateTopic = async () => {
     setIsGenerating(true);
@@ -29,10 +41,7 @@ const AdminDashboard = () => {
       }
 
       setTopic(data.topic);
-      toast({
-        title: "Topic Generated",
-        description: "A new topic has been generated successfully.",
-      });
+      setTopicUpdated(true);
     } catch (error) {
       console.error('Error:', error);
       toast({
@@ -140,14 +149,20 @@ const AdminDashboard = () => {
                 <CardContent className="space-y-5">
                   <div className="space-y-2">
                     <Label htmlFor="topic" className="text-gray-300">Topic</Label>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 relative">
                       <Input 
                         id="topic" 
+                        ref={topicInputRef}
                         value={topic}
                         onChange={(e) => setTopic(e.target.value)}
                         placeholder="Enter the blog post topic" 
-                        className="bg-[#1a1f3d] border-[#2a2f4d] focus:border-[#3a3f6d] focus:ring-[#3a3f6d] text-white placeholder:text-gray-500"
+                        className={`bg-[#1a1f3d] border-[#2a2f4d] focus:border-[#3a3f6d] focus:ring-[#3a3f6d] text-white placeholder:text-gray-500 ${isGenerating ? 'animate-pulse' : ''}`}
                       />
+                      {isGenerating && (
+                        <div className="absolute inset-y-0 right-12 flex items-center pr-3 pointer-events-none">
+                          <div className="h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                      )}
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -158,7 +173,7 @@ const AdminDashboard = () => {
                               onClick={generateTopic}
                               disabled={isGenerating}
                             >
-                              <Sparkles className={`h-4 w-4 ${isGenerating ? 'animate-spin text-blue-400' : 'text-gray-400'}`} />
+                              <Sparkles className={`h-4 w-4 ${isGenerating ? 'text-blue-400' : 'text-gray-400'}`} />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>
