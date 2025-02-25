@@ -53,6 +53,17 @@ serve(async (req) => {
 4. Include a number or year when appropriate
 5. No descriptions or additional text
 
+Additional requirements for diverse title structures:
+- Vary the numbers used in listicles (use 3, 5, 7, 8, or other numbers, not just 10)
+- Mix different title formats, such as:
+  * How-to guides (e.g., "How to Advance Your Radiology Career in 2024")
+  * Question-based titles (e.g., "What Makes a Successful Radiologist in Today's Healthcare?")
+  * Insight articles (e.g., "The Future of AI in Radiology: Key Insights for Job Seekers")
+  * Career guidance (e.g., "5 Essential Skills Modern Radiologists Need to Master")
+  * Industry trends (e.g., "7 Emerging Specializations in Diagnostic Imaging")
+  * Professional development (e.g., "3 Career-Changing Certifications for Radiology Professionals")
+- Occasionally use different title structures that don't include numbers
+
 IMPORTANT: Return ONLY the title, nothing else. Do not add any descriptions, markdown, or formatting.`
           },
           {
