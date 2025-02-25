@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +19,6 @@ const AdminDashboard = () => {
   const [topic, setTopic] = useState("");
   const [additionalInfo, setAdditionalInfo] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [topicUpdated, setTopicUpdated] = useState(false);
   const [showPostForm, setShowPostForm] = useState(true);
   const [generatedPost, setGeneratedPost] = useState("");
   const [isGeneratingPost, setIsGeneratingPost] = useState(false);
@@ -27,16 +27,6 @@ const AdminDashboard = () => {
   const [isGeneratingMeta, setIsGeneratingMeta] = useState(false);
   const topicInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-
-  useEffect(() => {
-    if (topicUpdated) {
-      toast({
-        title: "Topic Generated",
-        description: "A new topic has been generated successfully.",
-      });
-      setTopicUpdated(false);
-    }
-  }, [topicUpdated, toast]);
 
   const generateTopic = async () => {
     setIsGenerating(true);
@@ -47,8 +37,20 @@ const AdminDashboard = () => {
         throw error;
       }
 
-      setTopic(data.topic);
-      setTopicUpdated(true);
+      if (data?.topic) {
+        // Update topic state and ensure the input field is updated
+        setTopic(data.topic);
+        if (topicInputRef.current) {
+          topicInputRef.current.value = data.topic;
+        }
+
+        toast({
+          title: "Topic Generated",
+          description: "A new topic has been generated successfully.",
+        });
+      } else {
+        throw new Error('No topic was generated');
+      }
     } catch (error) {
       console.error('Error:', error);
       toast({
@@ -120,17 +122,20 @@ const AdminDashboard = () => {
         throw generationError;
       }
 
-      const postContent = generationData.content;
-      setGeneratedPost(postContent);
-      setShowPostForm(false);
-      
-      // Generate meta descriptions after post is generated
-      await generateMetaDescriptions();
-      
-      toast({
-        title: "Success",
-        description: "Blog post generated successfully!",
-      });
+      if (generationData?.content) {
+        setGeneratedPost(generationData.content);
+        setShowPostForm(false);
+        
+        // Generate meta descriptions after post is generated
+        await generateMetaDescriptions();
+        
+        toast({
+          title: "Success",
+          description: "Blog post generated successfully!",
+        });
+      } else {
+        throw new Error('No content was generated');
+      }
     } catch (error) {
       console.error('Error:', error);
       toast({
