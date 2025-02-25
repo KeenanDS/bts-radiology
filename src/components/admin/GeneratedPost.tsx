@@ -51,20 +51,13 @@ const GeneratedPost = ({
       className="grid grid-cols-1 md:grid-cols-5 gap-6"
     >
       <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50 md:col-span-3">
-        <CardHeader>
-          <CardTitle className="text-white text-2xl">Generated Blog Post</CardTitle>
-          <CardDescription className="text-gray-400">
-            Your AI-generated blog post based on the provided topic.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="prose prose-invert max-w-none">
-            <div className="whitespace-pre-wrap bg-[#1a1f3d] p-4 rounded-md text-gray-200 font-mono text-sm overflow-auto max-h-[600px]">
-              {generatedPost}
-            </div>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-white text-2xl">Generated Blog Post</CardTitle>
+            <CardDescription className="text-gray-400">
+              Your AI-generated blog post based on the provided topic.
+            </CardDescription>
           </div>
-        </CardContent>
-        <CardFooter>
           {!isSaved ? (
             <Button 
               className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none"
@@ -101,7 +94,14 @@ const GeneratedPost = ({
               </Tooltip>
             </TooltipProvider>
           )}
-        </CardFooter>
+        </CardHeader>
+        <CardContent>
+          <div className="prose prose-invert max-w-none">
+            <div className="whitespace-pre-wrap bg-[#1a1f3d] p-4 rounded-md text-gray-200 font-mono text-sm overflow-auto max-h-[600px]">
+              {generatedPost}
+            </div>
+          </div>
+        </CardContent>
       </Card>
 
       <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50 md:col-span-2">
