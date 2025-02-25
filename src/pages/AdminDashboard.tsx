@@ -84,39 +84,53 @@ const AdminDashboard = () => {
       }
 
       const postContent = generationData.content;
+      setGeneratedPost(postContent);
+      setShowPostForm(false);
+      
+      toast({
+        title: "Success",
+        description: "Blog post generated successfully!",
+      });
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate blog post. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingPost(false);
+    }
+  };
 
-      const { data: savedData, error: saveError } = await supabase
+  const handleSavePost = async () => {
+    try {
+      const { error: saveError } = await supabase
         .from('blog_posts')
         .insert([
           {
             title: topic,
-            content: postContent,
+            content: generatedPost,
             meta_description: additionalInfo || null
           }
         ])
-        .select()
         .single();
 
       if (saveError) {
         throw saveError;
       }
 
-      setGeneratedPost(postContent);
-      setShowPostForm(false);
-      setIsGeneratingPost(false);
-      
       toast({
         title: "Success",
-        description: "Blog post generated and saved successfully!",
+        description: "Blog post saved successfully!",
       });
     } catch (error) {
       console.error('Error:', error);
       toast({
         title: "Error",
-        description: "Failed to generate and save blog post. Please try again.",
+        description: "Failed to save blog post. Please try again.",
         variant: "destructive",
       });
-      setIsGeneratingPost(false);
     }
   };
 

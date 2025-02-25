@@ -1,16 +1,17 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save } from "lucide-react";
+import { Save, ArrowLeft } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface GeneratedPostProps {
   topic: string;
   generatedPost: string;
   resetForm: () => void;
+  onSave: () => Promise<void>;
 }
 
-const GeneratedPost = ({ topic, generatedPost, resetForm }: GeneratedPostProps) => {
+const GeneratedPost = ({ topic, generatedPost, resetForm, onSave }: GeneratedPostProps) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -32,6 +33,7 @@ const GeneratedPost = ({ topic, generatedPost, resetForm }: GeneratedPostProps) 
             className="text-gray-400 hover:text-white hover:bg-[#1a1f3d]"
             onClick={resetForm}
           >
+            <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Form
           </Button>
         </CardHeader>
@@ -43,7 +45,10 @@ const GeneratedPost = ({ topic, generatedPost, resetForm }: GeneratedPostProps) 
           </div>
         </CardContent>
         <CardFooter>
-          <Button className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none">
+          <Button 
+            className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none"
+            onClick={onSave}
+          >
             <Save className="mr-2 h-4 w-4" />
             Save Post
           </Button>

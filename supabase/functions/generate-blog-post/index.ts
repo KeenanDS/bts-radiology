@@ -38,22 +38,22 @@ serve(async (req) => {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-sonnet-20240229',
-        system: systemPrompt,
+        model: 'claude-3-haiku-20240307',
         messages: [
           {
             role: 'user',
             content: userPrompt
           }
         ],
+        system: systemPrompt,
         max_tokens: 4096
       })
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error('Anthropic API error:', error);
-      throw new Error(`Anthropic API error: ${error}`);
+      const errorText = await response.text();
+      console.error('Anthropic API error response:', errorText);
+      throw new Error(`Anthropic API error: ${errorText}`);
     }
 
     const data = await response.json();
@@ -72,4 +72,3 @@ serve(async (req) => {
     });
   }
 });
-
