@@ -79,7 +79,7 @@ const AdminDashboard = () => {
       }
 
       setMetaDescriptions(metaData.descriptions);
-      setSelectedMetaDescription(metaData.descriptions[0]); // Select first option by default
+      // Removed automatic selection of first description
       
       toast({
         title: "Success",

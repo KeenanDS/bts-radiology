@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,6 +37,36 @@ const GeneratedPost = ({
   const [showFactCheck, setShowFactCheck] = useState(false);
   const { toast } = useToast();
 
+  const handleSave = async () => {
+    if (!selectedMetaDescription) {
+      toast({
+        title: "Error",
+        description: "Please select a meta description before saving.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await onSave();
+      setIsSaved(true);
+      toast({
+        title: "Success",
+        description: "Post saved successfully!",
+      });
+    } catch (error) {
+      console.error('Error saving post:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save the post. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleFactCheck = async () => {
     setIsFactChecking(true);
     setShowFactCheck(true);
@@ -66,18 +95,6 @@ const GeneratedPost = ({
       });
     } finally {
       setIsFactChecking(false);
-    }
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      await onSave();
-      setIsSaved(true);
-    } catch (error) {
-      console.error('Error saving post:', error);
-    } finally {
-      setIsSaving(false);
     }
   };
 
