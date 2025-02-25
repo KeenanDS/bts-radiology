@@ -5,19 +5,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Save, FileText, User, Settings, LogOut, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, FileText, User, Settings, LogOut, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/components/ui/use-toast";
 
 const AdminDashboard = () => {
-  const { toast } = useToast();
   const [currentView, setCurrentView] = useState<"create" | "manage">("create");
   const [topic, setTopic] = useState("");
-  const [additionalInfo, setAdditionalInfo] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
 
   const generateTopic = () => {
     const topics = [
@@ -34,53 +29,6 @@ const AdminDashboard = () => {
     ];
     const randomTopic = topics[Math.floor(Math.random() * topics.length)];
     setTopic(randomTopic);
-  };
-
-  const generatePost = async () => {
-    if (!topic) {
-      toast({
-        title: "Error",
-        description: "Please provide a topic for the blog post",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsGenerating(true);
-
-    try {
-      const { data, error } = await supabase.functions.invoke('generate-blog-post', {
-        body: { topic, additionalInfo }
-      });
-
-      if (error) throw error;
-
-      const { title, content } = data;
-
-      const { error: insertError } = await supabase
-        .from('blog_posts')
-        .insert([{ title, content }]);
-
-      if (insertError) throw insertError;
-
-      toast({
-        title: "Success",
-        description: "Blog post generated and saved successfully!",
-      });
-
-      // Clear the form
-      setTopic("");
-      setAdditionalInfo("");
-    } catch (error) {
-      console.error('Error generating post:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to generate blog post",
-        variant: "destructive",
-      });
-    } finally {
-      setIsGenerating(false);
-    }
   };
 
   return (
@@ -210,30 +158,15 @@ const AdminDashboard = () => {
                     <Label htmlFor="additionalInfo" className="text-gray-300">Additional Information (Optional)</Label>
                     <Textarea 
                       id="additionalInfo" 
-                      value={additionalInfo}
-                      onChange={(e) => setAdditionalInfo(e.target.value)}
                       placeholder="Enter any additional information or context for the blog post"
                       className="min-h-40 bg-[#1a1f3d] border-[#2a2f4d] focus:border-[#3a3f6d] focus:ring-[#3a3f6d] text-white placeholder:text-gray-500"
                     />
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button 
-                    className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none"
-                    onClick={generatePost}
-                    disabled={isGenerating}
-                  >
-                    {isGenerating ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="mr-2 h-4 w-4" />
-                        Generate Post
-                      </>
-                    )}
+                  <Button className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none">
+                    <Save className="mr-2 h-4 w-4" />
+                    Generate Post
                   </Button>
                 </CardFooter>
               </Card>
