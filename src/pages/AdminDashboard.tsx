@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -74,24 +75,42 @@ const AdminDashboard = () => {
     try {
       // Simulate post generation with a delay
       // In a real app, you would call an API here
-      setTimeout(() => {
+      setTimeout(async () => {
         // Example generated post content
-        setGeneratedPost(`# ${topic}\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam euismod, nisl eget aliquam ultricies, nunc nisl aliquet nunc, quis aliquam nisl nunc quis nisl. Nullam euismod, nisl eget aliquam ultricies, nunc nisl aliquet nunc, quis aliquam nisl nunc quis nisl.\n\n## Introduction\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam euismod, nisl eget aliquam ultricies, nunc nisl aliquet nunc, quis aliquam nisl nunc quis nisl.\n\n## Main Content\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam euismod, nisl eget aliquam ultricies, nunc nisl aliquet nunc, quis aliquam nisl nunc quis nisl.`);
+        const postContent = `# ${topic}\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam euismod, nisl eget aliquam ultricies, nunc nisl aliquet nunc, quis aliquam nisl nunc quis nisl.\n\n## Introduction\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam euismod, nisl eget aliquam ultricies, nunc nisl aliquet nunc, quis aliquam nisl nunc quis nisl.\n\n## Main Content\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam euismod, nisl eget aliquam ultricies, nunc nisl aliquet nunc, quis aliquam nisl nunc quis nisl.`;
         
+        // Save the post to the database
+        const { data, error } = await supabase
+          .from('blog_posts')
+          .insert([
+            {
+              title: topic,
+              content: postContent,
+              meta_description: additionalInfo || null
+            }
+          ])
+          .select()
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        setGeneratedPost(postContent);
         // Hide the form and show the generated content
         setShowPostForm(false);
         setIsGeneratingPost(false);
         
         toast({
           title: "Success",
-          description: "Blog post generated successfully!",
+          description: "Blog post generated and saved successfully!",
         });
       }, 2000);
     } catch (error) {
       console.error('Error:', error);
       toast({
         title: "Error",
-        description: "Failed to generate blog post. Please try again.",
+        description: "Failed to generate and save blog post. Please try again.",
         variant: "destructive",
       });
       setIsGeneratingPost(false);
