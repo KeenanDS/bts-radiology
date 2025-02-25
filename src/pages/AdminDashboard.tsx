@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,26 +8,48 @@ import { ArrowLeft, Save, FileText, User, Settings, LogOut, Sparkles } from "luc
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useToast } from "@/components/ui/use-toast";
+import { Toaster } from "@/components/ui/toaster";
 
 const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<"create" | "manage">("create");
   const [topic, setTopic] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const { toast } = useToast();
 
-  const generateTopic = () => {
-    const topics = [
-      "The Future of Artificial Intelligence",
-      "Sustainable Living in Modern Cities",
-      "Digital Privacy in the Age of Social Media",
-      "Remote Work Revolution",
-      "Mindfulness and Mental Health",
-      "Innovation in Education",
-      "Climate Change Solutions",
-      "Emerging Technologies in Healthcare",
-      "The Impact of Blockchain Technology",
-      "Cybersecurity Best Practices"
-    ];
-    const randomTopic = topics[Math.floor(Math.random() * topics.length)];
-    setTopic(randomTopic);
+  const generateTopic = async () => {
+    setIsGenerating(true);
+    try {
+      const response = await fetch(
+        'https://<your-project>.supabase.co/functions/v1/generate-topic',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to generate topic');
+      }
+
+      const data = await response.json();
+      setTopic(data.topic);
+      toast({
+        title: "Topic Generated",
+        description: "A new topic has been generated successfully.",
+      });
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate topic. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -142,12 +163,13 @@ const AdminDashboard = () => {
                               size="icon"
                               className="h-10 w-10 bg-[#1a1f3d] hover:bg-[#2a2f5d]"
                               onClick={generateTopic}
+                              disabled={isGenerating}
                             >
-                              <Sparkles className="h-4 w-4 text-gray-400" />
+                              <Sparkles className={`h-4 w-4 ${isGenerating ? 'animate-spin text-blue-400' : 'text-gray-400'}`} />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p>Generate a random topic</p>
+                            <p>Generate a topic using AI</p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -188,6 +210,7 @@ const AdminDashboard = () => {
           </div>
         </div>
       </div>
+      <Toaster />
     </div>
   );
 };
