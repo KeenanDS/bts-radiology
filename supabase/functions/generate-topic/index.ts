@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -28,11 +27,11 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: 'You are a helpful assistant that generates engaging blog post topics about medical careers and healthcare. Generate one specific, interesting topic that would be relevant for a healthcare job board website. Keep it concise and focused.'
+            content: 'You are a specialized content strategist for the radiology and medical imaging industry. Your expertise is generating high-engagement blog topics that appeal to radiologists, imaging technicians, and other medical professionals in diagnostic imaging fields. Your topics should be:\n\n    1. Attention-grabbing with compelling headlines using numbers, questions, or emotional triggers (similar to Buzzfeed-style content)\n    2. SEO-optimized for radiology job searches and career advancement\n    3. Relevant to current trends, challenges, or innovations in the radiology field\n    4. Formatted to drive high click-through rates on LinkedIn and professional networks\n    5. Designed to position a radiology job board as an industry authority'
           },
           {
             role: 'user',
-            content: 'Generate a blog post topic that would be interesting for healthcare professionals looking for career opportunities.'
+            content: 'Generate a blog post topic for my radiology job board'
           }
         ],
         temperature: 0.7,
