@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -231,7 +230,6 @@ const AdminDashboard = () => {
                   <GeneratedPost
                     topic={topic}
                     generatedPost={generatedPost}
-                    resetForm={resetForm}
                     onSave={handleSavePost}
                     metaDescriptions={metaDescriptions}
                     selectedMetaDescription={selectedMetaDescription}

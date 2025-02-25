@@ -1,15 +1,16 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, ArrowLeft, Loader2 } from "lucide-react";
+import { Save, Loader2, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface GeneratedPostProps {
   topic: string;
   generatedPost: string;
-  resetForm: () => void;
   onSave: () => Promise<void>;
   metaDescriptions: string[];
   selectedMetaDescription: string;
@@ -19,14 +20,28 @@ interface GeneratedPostProps {
 
 const GeneratedPost = ({ 
   topic, 
-  generatedPost, 
-  resetForm, 
+  generatedPost,
   onSave,
   metaDescriptions,
   selectedMetaDescription,
   setSelectedMetaDescription,
   isGeneratingMeta
 }: GeneratedPostProps) => {
+  const [isSaved, setIsSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await onSave();
+      setIsSaved(true);
+    } catch (error) {
+      console.error('Error saving post:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -35,22 +50,11 @@ const GeneratedPost = ({
       className="grid grid-cols-1 md:grid-cols-5 gap-6"
     >
       <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50 md:col-span-3">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-white text-2xl">Generated Blog Post</CardTitle>
-            <CardDescription className="text-gray-400">
-              Your AI-generated blog post based on the provided topic.
-            </CardDescription>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="text-gray-400 hover:text-white hover:bg-[#1a1f3d]"
-            onClick={resetForm}
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Form
-          </Button>
+        <CardHeader>
+          <CardTitle className="text-white text-2xl">Generated Blog Post</CardTitle>
+          <CardDescription className="text-gray-400">
+            Your AI-generated blog post based on the provided topic.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="prose prose-invert max-w-none">
@@ -60,13 +64,42 @@ const GeneratedPost = ({
           </div>
         </CardContent>
         <CardFooter>
-          <Button 
-            className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none"
-            onClick={onSave}
-          >
-            <Save className="mr-2 h-4 w-4" />
-            Save Post
-          </Button>
+          {!isSaved ? (
+            <Button 
+              className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none"
+              onClick={handleSave}
+              disabled={isSaving || !selectedMetaDescription}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Post
+                </>
+              )}
+            </Button>
+          ) : (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none"
+                    onClick={() => {/* Fact check functionality will be implemented later */}}
+                  >
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Fact Check
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Verify the accuracy of the generated content</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </CardFooter>
       </Card>
 
