@@ -18,28 +18,46 @@ serve(async (req) => {
     const { content } = await req.json();
     console.log('Received content for fact-checking:', content.substring(0, 100) + '...');
 
-    // Create a more specific prompt focusing on statistical claims and healthcare/AI predictions
-    const prompt = `As a specialized fact-checker for medical and healthcare content, carefully analyze this blog post for:
+    const prompt = `As a specialized fact-checker for medical and healthcare content, carefully analyze this text. 
+    
+Your primary objectives are to:
 
-1. Statistical claims: Check any percentages, numbers, or quantitative statements
-2. Future predictions: Identify claims about future developments, especially regarding AI in healthcare
-3. Technology impact statements: Verify claims about AI/technology effects on healthcare professions
-4. Healthcare industry trends: Validate statements about medical practice changes
-5. Source verification: Note claims that lack proper attribution or scientific backing
+1. Review Factual Claims:
+   - Identify ANY numerical statistics, percentages, or quantitative data
+   - Check for specific dates, timeframes, or temporal claims
+   - Verify claims about research studies or scientific findings
+   - Analyze historical statements or industry developments
 
-For each potential issue found, provide:
-1. The exact claim made
-2. Why it needs verification (unsupported statistics, unverified predictions, etc.)
-3. A specific suggestion for improvement (e.g., adding source attribution, clarifying time frames, etc.)
+2. Scrutinize Healthcare Claims:
+   - Examine statements about medical procedures or treatments
+   - Verify claims about healthcare technology capabilities
+   - Check assertions about industry standards or practices
+   - Review statements about patient outcomes or success rates
 
-Format your response as a JSON array of issues, each with 'claim', 'issue', and 'suggestion' fields.
-If no issues are found, return an empty array.
+3. Evaluate AI-Related Content:
+   - Validate claims about AI capabilities in healthcare
+   - Check statements about AI adoption rates or implementation statistics
+   - Verify predictions about AI's impact on healthcare roles
+   - Review technical specifications or performance metrics
 
-Here's the content to check:
+IMPORTANT: For EACH potential issue you find, you MUST provide:
+1. The exact claim or statement from the text (quoted verbatim)
+2. A detailed explanation of why this claim requires verification
+3. A specific suggestion for improvement, such as:
+   - Adding source citations
+   - Including specific timeframes
+   - Qualifying statements with "may," "could," or similar terms
+   - Providing context for statistics
+   - Noting if something is a projection or estimate
+
+Format your response as a JSON array of objects, each with 'claim', 'issue', and 'suggestion' fields.
+If no issues are found, return an empty array but only after thorough verification.
+
+Here's the content to analyze:
 
 ${content}`;
 
-    console.log('Sending request to Perplexity API...');
+    console.log('Sending request to Perplexity API with enhanced prompt...');
     
     const response = await fetch('https://api.perplexity.ai/chat/completions', {
       method: 'POST',
@@ -52,28 +70,34 @@ ${content}`;
         messages: [
           {
             role: 'system',
-            content: `You are an expert fact-checker specializing in healthcare and medical technology content. Your expertise includes:
-- Medical research methodology
-- Healthcare industry statistics
-- AI/ML implementation in healthcare
+            content: `You are an expert fact-checker with specialized knowledge in:
+- Medical research methodology and statistics
+- Healthcare industry trends and standards
+- AI/ML implementation in healthcare settings
 - Evidence-based medicine principles
 - Scientific literature evaluation
+- Regulatory compliance in healthcare
 
-Focus on verifying:
-1. Statistical claims require recent, credible sources
-2. Future predictions must be clearly labeled as projections
-3. Technology impact claims need supporting evidence
-4. Industry trend statements require data backing
-5. Professional practice claims need verification
+Your primary directives are to:
+1. Be EXTREMELY skeptical of any unsourced statistics or absolute claims
+2. Flag ALL predictive statements about future developments
+3. Question any technological claims lacking specific implementation details
+4. Challenge generalizations about healthcare practices
+5. Identify potential conflicts with established medical evidence
 
-Be particularly vigilant about unsupported statistics and predictions about AI's impact on healthcare professions.`
+Maintain high standards for verification by:
+- Requiring specific sources for statistical claims
+- Ensuring temporal context for all trend statements
+- Demanding clear qualification of predictive claims
+- Insisting on precise technical specifications
+- Checking for logical consistency throughout`
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        temperature: 0.1,
+        temperature: 0.1, // Lowered temperature for more consistent, conservative fact-checking
         max_tokens: 2000,
         frequency_penalty: 0,
         presence_penalty: 0
@@ -83,7 +107,6 @@ Be particularly vigilant about unsupported statistics and predictions about AI's
     const data = await response.json();
     console.log('Received response from Perplexity API:', JSON.stringify(data, null, 2));
 
-    // Parse the response from the model with enhanced error handling
     let issues = [];
     try {
       const content = data.choices[0].message.content;
@@ -91,14 +114,17 @@ Be particularly vigilant about unsupported statistics and predictions about AI's
         // First try to parse as direct JSON
         try {
           issues = JSON.parse(content);
-        } catch {
+          console.log(`Successfully parsed ${issues.length} issues from response`);
+        } catch (parseError) {
+          console.error('Direct JSON parsing failed, attempting to extract JSON structure:', parseError);
           // If direct parsing fails, try to find and parse any JSON-like structure
           const jsonMatch = content.match(/\[.*\]/s);
           if (jsonMatch) {
             try {
               issues = JSON.parse(jsonMatch[0]);
-            } catch (innerError) {
-              console.error('Error parsing JSON from matched content:', innerError);
+              console.log(`Successfully extracted and parsed ${issues.length} issues from matched content`);
+            } catch (matchError) {
+              console.error('Error parsing JSON from matched content:', matchError);
               throw new Error('Failed to parse fact-check results');
             }
           } else {
@@ -107,12 +133,27 @@ Be particularly vigilant about unsupported statistics and predictions about AI's
           }
         }
       }
+
+      // Validate the structure of each issue
+      issues = issues.filter(issue => {
+        const isValid = 
+          issue && 
+          typeof issue === 'object' && 
+          typeof issue.claim === 'string' && 
+          typeof issue.issue === 'string' && 
+          typeof issue.suggestion === 'string';
+        
+        if (!isValid) {
+          console.warn('Filtered out invalid issue:', issue);
+        }
+        return isValid;
+      });
+
+      console.log(`Final validated issues count: ${issues.length}`);
     } catch (error) {
-      console.error('Error parsing fact-check results:', error);
+      console.error('Error processing fact-check results:', error);
       throw new Error('Failed to process fact-check results');
     }
-
-    console.log(`Identified ${issues.length} potential issues`);
 
     return new Response(JSON.stringify({ issues }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
