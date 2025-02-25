@@ -15,6 +15,8 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Generating topic with OpenAI...');
+    
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -24,20 +26,29 @@ serve(async (req) => {
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
-          { 
-            role: 'system', 
-            content: 'You are a helpful assistant that generates engaging blog post topics. Generate one specific, interesting topic without any additional text or formatting.' 
+          {
+            role: 'system',
+            content: 'You are a helpful assistant that generates engaging blog post topics about medical careers and healthcare. Generate one specific, interesting topic that would be relevant for a healthcare job board website. Keep it concise and focused.'
           },
-          { 
-            role: 'user', 
-            content: 'Generate a blog post topic' 
+          {
+            role: 'user',
+            content: 'Generate a blog post topic that would be interesting for healthcare professionals looking for career opportunities.'
           }
         ],
+        temperature: 0.7,
+        max_tokens: 50
       }),
     });
 
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('OpenAI API error:', error);
+      throw new Error('Failed to generate topic');
+    }
+
     const data = await response.json();
     const generatedTopic = data.choices[0].message.content;
+    console.log('Successfully generated topic:', generatedTopic);
 
     return new Response(JSON.stringify({ topic: generatedTopic }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

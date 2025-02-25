@@ -10,6 +10,7 @@ import { useState } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/use-toast";
 import { Toaster } from "@/components/ui/toaster";
+import { supabase } from "@/lib/supabase";
 
 const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<"create" | "manage">("create");
@@ -20,21 +21,12 @@ const AdminDashboard = () => {
   const generateTopic = async () => {
     setIsGenerating(true);
     try {
-      const response = await fetch(
-        'https://<your-project>.supabase.co/functions/v1/generate-topic',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to generate topic');
+      const { data, error } = await supabase.functions.invoke('generate-topic');
+      
+      if (error) {
+        throw error;
       }
 
-      const data = await response.json();
       setTopic(data.topic);
       toast({
         title: "Topic Generated",
