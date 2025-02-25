@@ -1,17 +1,32 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, ArrowLeft } from "lucide-react";
+import { Save, ArrowLeft, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 
 interface GeneratedPostProps {
   topic: string;
   generatedPost: string;
   resetForm: () => void;
   onSave: () => Promise<void>;
+  metaDescriptions: string[];
+  selectedMetaDescription: string;
+  setSelectedMetaDescription: (description: string) => void;
+  isGeneratingMeta: boolean;
 }
 
-const GeneratedPost = ({ topic, generatedPost, resetForm, onSave }: GeneratedPostProps) => {
+const GeneratedPost = ({ 
+  topic, 
+  generatedPost, 
+  resetForm, 
+  onSave,
+  metaDescriptions,
+  selectedMetaDescription,
+  setSelectedMetaDescription,
+  isGeneratingMeta
+}: GeneratedPostProps) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -59,11 +74,40 @@ const GeneratedPost = ({ topic, generatedPost, resetForm, onSave }: GeneratedPos
         <CardHeader>
           <CardTitle className="text-white text-xl">Meta Description</CardTitle>
           <CardDescription className="text-gray-400">
-            SEO metadata for your blog post.
+            Select the best meta description for SEO.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-gray-500">Meta description functionality will be added soon.</p>
+          {isGeneratingMeta ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+              <span className="ml-2 text-gray-400">Generating descriptions...</span>
+            </div>
+          ) : metaDescriptions.length > 0 ? (
+            <RadioGroup
+              value={selectedMetaDescription}
+              onValueChange={setSelectedMetaDescription}
+              className="space-y-4"
+            >
+              {metaDescriptions.map((description, index) => (
+                <div key={index} className="flex items-start space-x-2">
+                  <RadioGroupItem
+                    value={description}
+                    id={`option-${index}`}
+                    className="border-gray-600 text-white"
+                  />
+                  <Label
+                    htmlFor={`option-${index}`}
+                    className="text-sm text-gray-300 cursor-pointer leading-relaxed"
+                  >
+                    {description}
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          ) : (
+            <p className="text-gray-500">No meta descriptions generated yet.</p>
+          )}
         </CardContent>
       </Card>
     </motion.div>

@@ -23,6 +23,9 @@ const AdminDashboard = () => {
   const [showPostForm, setShowPostForm] = useState(true);
   const [generatedPost, setGeneratedPost] = useState("");
   const [isGeneratingPost, setIsGeneratingPost] = useState(false);
+  const [metaDescriptions, setMetaDescriptions] = useState<string[]>([]);
+  const [selectedMetaDescription, setSelectedMetaDescription] = useState("");
+  const [isGeneratingMeta, setIsGeneratingMeta] = useState(false);
   const topicInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -59,6 +62,40 @@ const AdminDashboard = () => {
     }
   };
 
+  const generateMetaDescriptions = async () => {
+    setIsGeneratingMeta(true);
+    try {
+      const { data: metaData, error: metaError } = await supabase.functions
+        .invoke('generate-meta-descriptions', {
+          body: JSON.stringify({
+            title: topic,
+            content: generatedPost
+          })
+        });
+
+      if (metaError) {
+        throw metaError;
+      }
+
+      setMetaDescriptions(metaData.descriptions);
+      setSelectedMetaDescription(metaData.descriptions[0]); // Select first option by default
+      
+      toast({
+        title: "Success",
+        description: "Meta descriptions generated successfully!",
+      });
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate meta descriptions. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingMeta(false);
+    }
+  };
+
   const handleGeneratePost = async () => {
     if (!topic.trim()) {
       toast({
@@ -88,6 +125,9 @@ const AdminDashboard = () => {
       setGeneratedPost(postContent);
       setShowPostForm(false);
       
+      // Generate meta descriptions after post is generated
+      await generateMetaDescriptions();
+      
       toast({
         title: "Success",
         description: "Blog post generated successfully!",
@@ -105,6 +145,15 @@ const AdminDashboard = () => {
   };
 
   const handleSavePost = async () => {
+    if (!selectedMetaDescription) {
+      toast({
+        title: "Error",
+        description: "Please select a meta description before saving.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const { error: saveError } = await supabase
         .from('blog_posts')
@@ -112,7 +161,7 @@ const AdminDashboard = () => {
           {
             title: topic,
             content: generatedPost,
-            meta_description: additionalInfo || null
+            meta_description: selectedMetaDescription
           }
         ])
         .single();
@@ -140,6 +189,8 @@ const AdminDashboard = () => {
     setGeneratedPost("");
     setTopic("");
     setAdditionalInfo("");
+    setMetaDescriptions([]);
+    setSelectedMetaDescription("");
   };
 
   return (
@@ -182,6 +233,10 @@ const AdminDashboard = () => {
                     generatedPost={generatedPost}
                     resetForm={resetForm}
                     onSave={handleSavePost}
+                    metaDescriptions={metaDescriptions}
+                    selectedMetaDescription={selectedMetaDescription}
+                    setSelectedMetaDescription={setSelectedMetaDescription}
+                    isGeneratingMeta={isGeneratingMeta}
                   />
                 )}
               </AnimatePresence>
