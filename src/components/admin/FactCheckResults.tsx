@@ -15,6 +15,7 @@ interface FactCheckResultsProps {
   postId?: string;
   onContentUpdated?: (newContent: string) => void;
   content?: string;
+  onIgnoreIssue?: (index: number) => void;
 }
 
 type SortOption = "newest" | "severity" | "confidence";
@@ -25,7 +26,8 @@ const FactCheckResults = ({
   isLoading, 
   postId, 
   onContentUpdated, 
-  content 
+  content,
+  onIgnoreIssue
 }: FactCheckResultsProps) => {
   const [fixingIssues, setFixingIssues] = useState<Set<number>>(new Set());
   const [fixedIssues, setFixedIssues] = useState<Set<number>>(new Set());
@@ -186,6 +188,19 @@ const FactCheckResults = ({
         const newSet = new Set(prev);
         newSet.delete(index);
         return newSet;
+      });
+    }
+  };
+
+  // Handle ignore issue internally if no external handler is provided
+  const handleIgnoreIssue = (index: number) => {
+    if (onIgnoreIssue) {
+      onIgnoreIssue(index);
+    } else {
+      toast({
+        title: "Action not supported",
+        description: "Cannot ignore issues in this context.",
+        variant: "destructive",
       });
     }
   };
@@ -366,6 +381,7 @@ const FactCheckResults = ({
                 isFixed={fixedIssues.has(originalIndex)}
                 onRetry={() => handleRetryFactCheck(originalIndex)}
                 onRevise={() => handleReviseIssue(originalIndex)}
+                onIgnore={() => handleIgnoreIssue(originalIndex)}
               />
             );
           })}

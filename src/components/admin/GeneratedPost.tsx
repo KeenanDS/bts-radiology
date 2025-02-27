@@ -469,7 +469,7 @@ const GeneratedPost = ({
                           <FactCheckResults 
                             issues={factCheckIssues}
                             isLoading={isFactChecking}
-                            postId={postId}
+                            postId={postId || undefined}
                             content={currentContent}
                             onContentUpdated={handleContentUpdated}
                             onIgnoreIssue={handleIgnoreIssue}
