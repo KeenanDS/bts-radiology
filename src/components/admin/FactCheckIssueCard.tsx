@@ -11,7 +11,8 @@ import {
   ChevronUp,
   AlertCircle,
   AlertOctagon,
-  ExternalLink
+  ExternalLink,
+  XCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,7 @@ export interface FactCheckIssue {
   resolved?: boolean;
   severity?: "critical" | "major" | "minor";
   confidence?: number;
+  ignored?: boolean;
 }
 
 interface FactCheckIssueCardProps {
@@ -35,6 +37,7 @@ interface FactCheckIssueCardProps {
   isFixed: boolean;
   onRetry: () => void;
   onRevise: () => void;
+  onIgnore: () => void;
 }
 
 const FactCheckIssueCard = ({
@@ -44,7 +47,8 @@ const FactCheckIssueCard = ({
   isFixing,
   isFixed,
   onRetry,
-  onRevise
+  onRevise,
+  onIgnore
 }: FactCheckIssueCardProps) => {
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -59,24 +63,51 @@ const FactCheckIssueCard = ({
     switch (severity) {
       case "critical":
         return (
-          <Badge variant="destructive" className="ml-2 font-medium">
-            <AlertCircle className="h-3 w-3 mr-1" />
-            Critical
-          </Badge>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="destructive" className="ml-2 font-medium">
+                  <AlertCircle className="h-3 w-3 mr-1" />
+                  Critical
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Critical issues contain factually incorrect information that should be fixed immediately.</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
       case "major":
         return (
-          <Badge variant="default" className="ml-2 bg-yellow-600 hover:bg-yellow-700 font-medium">
-            <AlertTriangle className="h-3 w-3 mr-1" />
-            Major
-          </Badge>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="default" className="ml-2 bg-yellow-600 hover:bg-yellow-700 font-medium">
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  Major
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Major issues contain potentially misleading information that should be addressed.</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
       case "minor":
         return (
-          <Badge variant="outline" className="ml-2 text-blue-400 border-blue-400 font-medium">
-            <AlertOctagon className="h-3 w-3 mr-1" />
-            Minor
-          </Badge>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="outline" className="ml-2 text-blue-400 border-blue-400 font-medium">
+                  <AlertOctagon className="h-3 w-3 mr-1" />
+                  Minor
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Minor issues are style or context concerns that may need clarification.</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
       default:
         return null;
@@ -85,17 +116,54 @@ const FactCheckIssueCard = ({
 
   // Confidence score UI element (if provided)
   const confidenceScore = issue.confidence ? (
-    <Badge 
-      variant="outline" 
-      className={`ml-auto ${
-        issue.confidence > 80 ? "border-green-500 text-green-500" : 
-        issue.confidence > 50 ? "border-yellow-500 text-yellow-500" : 
-        "border-red-500 text-red-500"
-      }`}
-    >
-      {issue.confidence}% confidence
-    </Badge>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge 
+            variant="outline" 
+            className={`ml-auto ${
+              issue.confidence > 80 ? "border-green-500 text-green-500" : 
+              issue.confidence > 50 ? "border-yellow-500 text-yellow-500" : 
+              "border-red-500 text-red-500"
+            }`}
+          >
+            {issue.confidence}% confidence
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Confidence score indicates how certain our fact-checking system is about this issue. Higher is more certain.</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   ) : null;
+
+  // If the issue is ignored, display in a muted style
+  if (issue.ignored) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+        transition={{ duration: 0.3 }}
+        className="p-4 rounded-md mb-4 bg-[#1a1f3d]/50 border border-[#2a2f4d]/50 opacity-60"
+      >
+        <div className="flex justify-between items-center">
+          <div className="flex items-center">
+            <span className="text-gray-400 font-medium">Issue #{index + 1} (Ignored)</span>
+            {getSeverityBadge()}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-gray-400 hover:text-white hover:bg-[#2a2f5d]"
+            onClick={onIgnore}
+          >
+            Restore
+          </Button>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -177,24 +245,35 @@ const FactCheckIssueCard = ({
 
             <div className="flex justify-end mt-4 space-x-2">
               {!isFixed && !issue.resolved && (
-                <Button
-                  onClick={onRetry}
-                  disabled={isRetrying || isFixing}
-                  variant="outline"
-                  className="bg-transparent border-[#2a2f4d] text-gray-300 hover:bg-[#2a2f5d] hover:text-white"
-                >
-                  {isRetrying ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Verifying...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      Verify
-                    </>
-                  )}
-                </Button>
+                <>
+                  <Button
+                    onClick={onIgnore}
+                    disabled={isRetrying || isFixing}
+                    variant="outline"
+                    className="bg-transparent border-[#2a2f4d] text-gray-300 hover:bg-[#2a2f5d] hover:text-white"
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Ignore
+                  </Button>
+                  <Button
+                    onClick={onRetry}
+                    disabled={isRetrying || isFixing}
+                    variant="outline"
+                    className="bg-transparent border-[#2a2f4d] text-gray-300 hover:bg-[#2a2f5d] hover:text-white"
+                  >
+                    {isRetrying ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Verifying...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Verify
+                      </>
+                    )}
+                  </Button>
+                </>
               )}
 
               <Button
