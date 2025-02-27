@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { format } from "date-fns";
+import { format, parse, addHours, set } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Calendar, Clock, ListPlus, CheckCircle, CalendarDays, Plus, Minus, X } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Toaster } from "@/components/ui/toaster";
 import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
 import Sidebar from "@/components/admin/Sidebar";
 
 interface ScheduledPost {
@@ -32,6 +33,7 @@ interface ScheduledPost {
 
 const SchedulerPage = () => {
   const [date, setDate] = useState<Date | undefined>(new Date());
+  const [time, setTime] = useState("09:00");
   const [numPosts, setNumPosts] = useState(1);
   const [autoGenerateTopics, setAutoGenerateTopics] = useState(true);
   const [autoFactCheck, setAutoFactCheck] = useState(true);
@@ -122,13 +124,17 @@ const SchedulerPage = () => {
       }
     }
 
+    // Combine date and time
+    const [hours, minutes] = time.split(':').map(Number);
+    const scheduledDateTime = set(date, { hours, minutes });
+
     setIsSubmitting(true);
     try {
       const { data, error } = await supabase
         .from("scheduled_posts")
         .insert([
           {
-            scheduled_for: format(date, "yyyy-MM-dd"),
+            scheduled_for: scheduledDateTime.toISOString(),
             num_posts: numPosts,
             topics: !autoGenerateTopics ? parsedTopics : [],
             auto_generate_topics: autoGenerateTopics,
@@ -144,11 +150,12 @@ const SchedulerPage = () => {
 
       toast({
         title: "Success",
-        description: `Successfully scheduled ${numPosts} post(s) for ${format(date, "MMMM d, yyyy")}.`,
+        description: `Successfully scheduled ${numPosts} post(s) for ${format(scheduledDateTime, "MMMM d, yyyy 'at' h:mm a")}.`,
       });
 
       // Reset form
       setDate(new Date());
+      setTime("09:00");
       setNumPosts(1);
       setAutoGenerateTopics(true);
       setAutoFactCheck(true);
@@ -165,6 +172,15 @@ const SchedulerPage = () => {
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const formatScheduledDateTime = (dateTimeString: string) => {
+    try {
+      const date = new Date(dateTimeString);
+      return format(date, "MMM d, yyyy 'at' h:mm a");
+    } catch (error) {
+      return dateTimeString;
     }
   };
 
@@ -232,6 +248,21 @@ const SchedulerPage = () => {
                       />
                     </PopoverContent>
                   </Popover>
+                </div>
+                
+                {/* Time Picker */}
+                <div className="space-y-2">
+                  <Label htmlFor="time" className="text-sm text-gray-300">Schedule Time</Label>
+                  <div className="flex items-center">
+                    <Clock className="mr-2 h-4 w-4 text-gray-500" />
+                    <Input
+                      id="time"
+                      type="time"
+                      value={time}
+                      onChange={(e) => setTime(e.target.value)}
+                      className="bg-[#1a1f3d] border-[#2a2f4d] text-white"
+                    />
+                  </div>
                 </div>
 
                 {/* Number of Posts */}
@@ -355,11 +386,7 @@ How AI is Transforming Medical Imaging"
                             <div className="flex items-center mb-2">
                               <CalendarDays className="h-4 w-4 text-blue-400 mr-2" />
                               <span className="text-white font-medium">
-                                {new Date(post.scheduled_for).toLocaleDateString("en-US", {
-                                  year: "numeric",
-                                  month: "long",
-                                  day: "numeric",
-                                })}
+                                {formatScheduledDateTime(post.scheduled_for)}
                               </span>
                             </div>
                             <div className="text-sm text-gray-400 mb-2">
