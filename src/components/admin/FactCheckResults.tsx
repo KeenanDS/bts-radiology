@@ -51,20 +51,19 @@ const FactCheckResults = ({ issues, isLoading, postId, onContentUpdated, content
     try {
       console.log(`Revising issue ${index}: ${issue.claim.substring(0, 30)}...`);
       
-      const { data, error } = await supabase.functions.invoke('fact-check-post', {
+      // Call the new revise-blog-post edge function
+      const { data, error } = await supabase.functions.invoke('revise-blog-post', {
         body: JSON.stringify({
-          action: 'revise',
           postId,
-          issueIndex: index,
-          claim: issue.claim,
+          content,
           issue: issue.issue,
-          suggestion: issue.suggestion,
-          content
+          claim: issue.claim,
+          suggestion: issue.suggestion
         })
       });
 
       if (error) {
-        console.error('Error invoking fact-check-post function:', error);
+        console.error('Error invoking revise-blog-post function:', error);
         throw error;
       }
 
