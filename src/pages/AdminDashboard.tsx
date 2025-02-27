@@ -91,7 +91,10 @@ const AdminDashboard = () => {
 
       console.log("Meta descriptions received:", metaData.descriptions);
       setMetaDescriptions(metaData.descriptions);
-      // Removed automatic selection of first description
+      // Set the first description as selected by default
+      if (metaData.descriptions && metaData.descriptions.length > 0) {
+        setSelectedMetaDescription(metaData.descriptions[0]);
+      }
       
       toast({
         title: "Success",
@@ -175,19 +178,9 @@ const AdminDashboard = () => {
       <Sidebar />
       
       <div className="flex-1 p-6 bg-gradient-to-br from-[#0a0b17] via-[#111936] to-[#0a0b17]">
-        <div className="max-w-4xl mx-auto space-y-8">
+        <div className="max-w-5xl mx-auto space-y-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              {!showPostForm && (
-                <Button 
-                  variant="ghost" 
-                  onClick={resetForm}
-                  className="text-gray-400 hover:text-white hover:bg-[#1a1f3d]"
-                >
-                  <ArrowLeft className="h-5 w-5 mr-2" />
-                  Back to New Post
-                </Button>
-              )}
+            <div>
               <h1 className="text-2xl font-bold text-white tracking-tight">
                 {currentView === "create" ? "Create New Post" : "Manage Posts"}
               </h1>

@@ -295,11 +295,23 @@ const GeneratedPost = ({
       {/* Header card with title and primary actions */}
       <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <div>
-            <CardTitle className="text-white text-2xl">{topic}</CardTitle>
-            <CardDescription className="text-gray-400">
-              AI-generated blog post based on your topic
-            </CardDescription>
+          <div className="flex items-center space-x-3">
+            {resetForm && (
+              <Button 
+                variant="ghost" 
+                onClick={resetForm}
+                className="text-gray-400 hover:text-white hover:bg-[#1a1f3d]"
+              >
+                <ArrowLeft className="h-5 w-5 mr-2" />
+                Back to New Post
+              </Button>
+            )}
+            <div>
+              <CardTitle className="text-white text-2xl">{topic}</CardTitle>
+              <CardDescription className="text-gray-400">
+                AI-generated blog post based on your topic
+              </CardDescription>
+            </div>
           </div>
           <div className="flex items-center space-x-2">
             {!isSaved ? (
@@ -361,10 +373,10 @@ const GeneratedPost = ({
         </CardHeader>
         
         <CardContent className="pt-4">
-          {/* Modified grid layout with better spacing */}
-          <div className={`grid ${showSidebar ? 'md:grid-cols-3 gap-8' : 'grid-cols-1'}`}>
-            {/* Content Area - now takes up 2 columns for more space */}
-            <div className={`${showSidebar ? 'md:col-span-2' : 'w-full'} space-y-4`}>
+          {/* Modified grid layout for better proportions */}
+          <div className={`grid ${showSidebar ? 'md:grid-cols-4 gap-6' : 'grid-cols-1'}`}>
+            {/* Content Area - now takes up 3 columns for more space */}
+            <div className={`${showSidebar ? 'md:col-span-3' : 'w-full'} space-y-4`}>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-white text-sm font-medium">Content</h3>
                 {factCheckIssues.length > 0 && (
@@ -377,7 +389,7 @@ const GeneratedPost = ({
                 )}
               </div>
               <div className="prose prose-invert max-w-none">
-                <div className="whitespace-pre-wrap bg-[#1a1f3d] p-4 rounded-md text-gray-200 font-mono text-sm overflow-auto max-h-[600px]">
+                <div className="whitespace-pre-wrap bg-[#1a1f3d] p-6 rounded-md text-gray-200 font-mono text-sm overflow-auto max-h-[650px]">
                   {currentContent}
                 </div>
               </div>
@@ -402,7 +414,7 @@ const GeneratedPost = ({
                       </div>
                     ) : metaDescriptions.length > 0 ? (
                       <div className="space-y-4">
-                        {/* Always show radio group for meta descriptions */}
+                        {/* RadioGroup for meta descriptions - always visible */}
                         <RadioGroup
                           value={selectedMetaDescription}
                           onValueChange={setSelectedMetaDescription}
@@ -459,7 +471,7 @@ const GeneratedPost = ({
                   )}
                 </Card>
 
-                {/* Fact Check Section - Only show if saved or make it clear saving is required */}
+                {/* Fact Check Section - Improved messaging */}
                 <Card className="bg-[#1a1f3d] border-[#2a2f4d]">
                   <CardHeader className="pb-2">
                     <div className="flex justify-between items-center">
