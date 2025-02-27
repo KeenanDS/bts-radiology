@@ -1,6 +1,8 @@
+
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { Json } from "@/integrations/supabase/types";
 import { ArrowUpDown, Download, FileDown, Check, Clock, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -10,6 +12,24 @@ import { Toaster } from "@/components/ui/toaster";
 import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/admin/Sidebar";
 
+interface FactCheckIssue {
+  claim: string;
+  issue: string;
+  suggestion?: string;
+}
+
+interface FactCheckResult {
+  id: string;
+  issues: FactCheckIssue[];
+  checked_at: string;
+}
+
+interface RawFactCheckResult {
+  id: string;
+  issues: Json;
+  checked_at: string;
+}
+
 interface BlogPost {
   id: string;
   title: string;
@@ -17,15 +37,7 @@ interface BlogPost {
   meta_description: string | null;
   created_at: string;
   updated_at: string;
-  fact_check_results?: {
-    id: string;
-    issues: Array<{
-      claim: string;
-      issue: string;
-      suggestion?: string;
-    }>;
-    checked_at: string;
-  } | null;
+  fact_check_results?: FactCheckResult | null;
 }
 
 const BlogPostsPage = () => {
@@ -58,7 +70,34 @@ const BlogPostsPage = () => {
         throw error;
       }
 
-      setPosts(data || []);
+      // Process and transform the data to match our BlogPost interface
+      const processedPosts: BlogPost[] = (data || []).map((post: any) => {
+        // Handle fact check results type conversion
+        let factCheckResults = null;
+        if (post.fact_check_results) {
+          const rawResults = post.fact_check_results as RawFactCheckResult;
+          factCheckResults = {
+            id: rawResults.id,
+            checked_at: rawResults.checked_at,
+            // Ensure issues is treated as the correct type
+            issues: Array.isArray(rawResults.issues) 
+              ? rawResults.issues as FactCheckIssue[]
+              : []
+          };
+        }
+
+        return {
+          id: post.id,
+          title: post.title,
+          content: post.content,
+          meta_description: post.meta_description,
+          created_at: post.created_at,
+          updated_at: post.updated_at,
+          fact_check_results: factCheckResults
+        };
+      });
+
+      setPosts(processedPosts);
     } catch (error) {
       console.error("Error fetching posts:", error);
       toast({
