@@ -61,8 +61,10 @@ const GeneratedPost = ({
   const [factCheckIssues, setFactCheckIssues] = useState<FactCheckIssue[]>([]);
   const [currentContent, setCurrentContent] = useState(generatedPost);
   const [postId, setPostId] = useState<string | null>(null);
-  // Changed: Always show sidebar when a post is generated
+  // Always show sidebar when a post is generated
   const [showSidebar, setShowSidebar] = useState(true);
+  // Track if fact check has been run at least once
+  const [factCheckRun, setFactCheckRun] = useState(false);
   const { toast } = useToast();
 
   // Update currentContent when generatedPost changes
@@ -212,6 +214,8 @@ const GeneratedPost = ({
       // Transform API response to the format expected by the FactCheckResults component
       const transformedIssues = mapApiIssues(data.issues);
       setFactCheckIssues(transformedIssues);
+      // Mark that fact check has been run
+      setFactCheckRun(true);
       
       toast({
         title: "Fact Check Complete",
@@ -298,26 +302,6 @@ const GeneratedPost = ({
             </CardDescription>
           </div>
           <div className="flex items-center space-x-2">
-            {resetForm && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      onClick={resetForm}
-                      className="border-[#2a2f4d] hover:bg-[#2a2f5d] hover:text-white"
-                    >
-                      <ArrowLeft className="h-4 w-4 mr-2" />
-                      Back to New Post
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Return to create a new post</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-            
             {!isSaved ? (
               <TooltipProvider>
                 <Tooltip>
@@ -377,9 +361,10 @@ const GeneratedPost = ({
         </CardHeader>
         
         <CardContent className="pt-4">
-          <div className={`grid ${showSidebar ? 'md:grid-cols-5 gap-6' : 'grid-cols-1'}`}>
-            {/* Content Area */}
-            <div className={`${showSidebar ? 'md:col-span-3' : 'w-full'} space-y-4`}>
+          {/* Modified grid layout with better spacing */}
+          <div className={`grid ${showSidebar ? 'md:grid-cols-3 gap-8' : 'grid-cols-1'}`}>
+            {/* Content Area - now takes up 2 columns for more space */}
+            <div className={`${showSidebar ? 'md:col-span-2' : 'w-full'} space-y-4`}>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-white text-sm font-medium">Content</h3>
                 {factCheckIssues.length > 0 && (
@@ -398,9 +383,9 @@ const GeneratedPost = ({
               </div>
             </div>
 
-            {/* Right Sidebar */}
+            {/* Right Sidebar - now 1 column for better proportions */}
             {showSidebar && (
-              <div className="md:col-span-2 space-y-6">
+              <div className="md:col-span-1 space-y-6">
                 {/* Meta Description Section */}
                 <Card className="bg-[#1a1f3d] border-[#2a2f4d]">
                   <CardHeader className="pb-2">
@@ -415,43 +400,49 @@ const GeneratedPost = ({
                         <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
                         <span className="ml-2 text-gray-400">Generating descriptions...</span>
                       </div>
-                    ) : selectedMetaDescription ? (
-                      <div className="p-3 border border-[#2a2f4d] rounded-md">
-                        <h4 className="text-white text-sm font-medium mb-2">Search Result Preview</h4>
-                        <div className="bg-white rounded-md p-3 text-black">
-                          <div className="text-[#1a0dab] text-lg font-medium hover:underline cursor-pointer truncate">
-                            {topic}
-                          </div>
-                          <div className="text-[#006621] text-xs mb-1">
-                            www.beyondthescan.com
-                          </div>
-                          <div className="text-sm text-[#545454]">
-                            {selectedMetaDescription}
-                          </div>
-                        </div>
-                      </div>
                     ) : metaDescriptions.length > 0 ? (
-                      <RadioGroup
-                        value={selectedMetaDescription}
-                        onValueChange={setSelectedMetaDescription}
-                        className="space-y-3"
-                      >
-                        {metaDescriptions.map((description, index) => (
-                          <div key={index} className="flex items-start space-x-2 bg-[#111936] p-3 rounded-md hover:bg-[#2a2f5d] transition-colors">
-                            <RadioGroupItem
-                              value={description}
-                              id={`option-${index}`}
-                              className="border-gray-600 text-white mt-1"
-                            />
-                            <Label
-                              htmlFor={`option-${index}`}
-                              className="text-sm text-gray-300 cursor-pointer leading-relaxed"
-                            >
-                              {description}
-                            </Label>
+                      <div className="space-y-4">
+                        {/* Always show radio group for meta descriptions */}
+                        <RadioGroup
+                          value={selectedMetaDescription}
+                          onValueChange={setSelectedMetaDescription}
+                          className="space-y-3"
+                        >
+                          {metaDescriptions.map((description, index) => (
+                            <div key={index} className="flex items-start space-x-2 bg-[#111936] p-3 rounded-md hover:bg-[#2a2f5d] transition-colors">
+                              <RadioGroupItem
+                                value={description}
+                                id={`option-${index}`}
+                                className="border-gray-600 text-white mt-1"
+                              />
+                              <Label
+                                htmlFor={`option-${index}`}
+                                className="text-sm text-gray-300 cursor-pointer leading-relaxed"
+                              >
+                                {description}
+                              </Label>
+                            </div>
+                          ))}
+                        </RadioGroup>
+                        
+                        {/* Show preview only when a description is selected */}
+                        {selectedMetaDescription && (
+                          <div className="p-3 border border-[#2a2f4d] rounded-md mt-4">
+                            <h4 className="text-white text-sm font-medium mb-2">Search Result Preview</h4>
+                            <div className="bg-white rounded-md p-3 text-black">
+                              <div className="text-[#1a0dab] text-lg font-medium hover:underline cursor-pointer truncate">
+                                {topic}
+                              </div>
+                              <div className="text-[#006621] text-xs mb-1">
+                                www.beyondthescan.com
+                              </div>
+                              <div className="text-sm text-[#545454]">
+                                {selectedMetaDescription}
+                              </div>
+                            </div>
                           </div>
-                        ))}
-                      </RadioGroup>
+                        )}
+                      </div>
                     ) : (
                       <p className="text-gray-500">No meta descriptions generated yet.</p>
                     )}
@@ -485,8 +476,10 @@ const GeneratedPost = ({
                     <CardDescription className="text-gray-400">
                       {!isSaved 
                         ? "Save your post first to run a fact check" 
-                        : factCheckIssues.length === 0 
+                        : factCheckIssues.length === 0 && !factCheckRun
                         ? "Run a fact check to verify your content" 
+                        : factCheckIssues.length === 0 && factCheckRun
+                        ? "No issues found in your content"
                         : "Review and fix potential factual issues"}
                     </CardDescription>
                   </CardHeader>
@@ -509,10 +502,16 @@ const GeneratedPost = ({
                       ) : (
                         <div className="flex flex-col items-center justify-center py-6 space-y-3 text-center">
                           {isSaved ? (
-                            <>
-                              <CheckCircle className="h-12 w-12 text-green-500" />
-                              <p className="text-gray-300">No issues detected. Content ready to publish!</p>
-                            </>
+                            factCheckRun ? (
+                              <>
+                                <CheckCircle className="h-12 w-12 text-green-500" />
+                                <p className="text-gray-300">No issues detected. Content ready to publish!</p>
+                              </>
+                            ) : (
+                              <div className="text-gray-300 py-4">
+                                <p>Click the 'Fact Check' button to verify your content.</p>
+                              </div>
+                            )
                           ) : (
                             <div className="text-gray-500 py-4">
                               <p>Save your post first to enable fact checking.</p>
