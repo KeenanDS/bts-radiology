@@ -1,25 +1,20 @@
-
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Loader2, AlertTriangle, CheckCircle, RefreshCw, Filter } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Loader2, CheckCircle, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import FactCheckIssueCard, { FactCheckIssue } from "./FactCheckIssueCard";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 
 interface FactCheckResultsProps {
   issues: FactCheckIssue[];
   isLoading: boolean;
   postId?: string;
-  onContentUpdated?: (newContent: string) => void;
+  onContentUpdated?: (newContent: string, fixedIndices?: number[]) => void;
   content?: string;
   onIgnoreIssue?: (index: number) => void;
 }
-
-type SortOption = "newest" | "severity" | "confidence";
-type FilterOption = "all" | "fixed" | "unfixed" | "critical" | "major" | "minor";
 
 const FactCheckResults = ({ 
   issues, 
@@ -32,8 +27,7 @@ const FactCheckResults = ({
   const [fixingIssues, setFixingIssues] = useState<Set<number>>(new Set());
   const [fixedIssues, setFixedIssues] = useState<Set<number>>(new Set());
   const [retryingIssues, setRetryingIssues] = useState<Set<number>>(new Set());
-  const [sortBy, setSortBy] = useState<SortOption>("newest");
-  const [filterBy, setFilterBy] = useState<FilterOption>("all");
+  const [isFixingAll, setIsFixingAll] = useState(false);
   const { toast } = useToast();
 
   const handleReviseIssue = async (index: number) => {
@@ -83,7 +77,7 @@ const FactCheckResults = ({
         
         // Update the content in the parent component
         if (onContentUpdated) {
-          onContentUpdated(data.revisedContent);
+          onContentUpdated(data.revisedContent, [index]);
         }
         
         // Mark this issue as fixed
@@ -92,6 +86,17 @@ const FactCheckResults = ({
           newSet.add(index);
           return newSet;
         });
+        
+        // Also mark the issue as resolved in the issues array
+        issues[index] = {
+          ...issues[index],
+          resolved: true
+        };
+        
+        // Force a re-render after the state updates have been applied
+        setTimeout(() => {
+          setFixedIssues(prev => new Set(prev));
+        }, 100);
         
         toast({
           title: "Success",
@@ -205,41 +210,135 @@ const FactCheckResults = ({
     }
   };
 
-  // Filter and sort issues
-  const processedIssues = [...issues]
-    .filter(issue => {
-      if (filterBy === "all") return true;
-      if (filterBy === "fixed") return fixedIssues.has(issues.indexOf(issue)) || issue.resolved;
-      if (filterBy === "unfixed") return !fixedIssues.has(issues.indexOf(issue)) && !issue.resolved;
-      if (filterBy === "critical" || filterBy === "major" || filterBy === "minor") {
-        return issue.severity === filterBy || 
-          (filterBy === "critical" && 
-           !issue.severity && 
-           (issue.issue.toLowerCase().includes("incorrect") || 
-            issue.issue.toLowerCase().includes("false")));
+  // Handle revising all issues at once
+  const handleReviseAll = async () => {
+    if (!postId || !content) {
+      toast({
+        title: "Error",
+        description: "Missing post ID or content for revision.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Get only active (non-ignored, non-fixed) issues
+    const activeIssues = issues.filter(issue => 
+      !issue.ignored && 
+      !fixedIssues.has(issues.indexOf(issue)) && 
+      !issue.resolved
+    );
+
+    if (activeIssues.length === 0) {
+      toast({
+        title: "No issues to fix",
+        description: "All issues have already been addressed.",
+      });
+      return;
+    }
+
+    setIsFixingAll(true);
+
+    try {
+      // Process each issue sequentially using the existing revise-blog-post function
+      let currentContent = content;
+      let successCount = 0;
+      
+      // Track which issues were successfully fixed
+      const newlyFixedIssues = new Set<number>();
+      
+      for (const issue of activeIssues) {
+        const issueIndex = issues.indexOf(issue);
+        
+        try {
+          console.log(`Revising issue ${issueIndex}: ${issue.claim.substring(0, 30)}...`);
+          
+          // Call the revise-blog-post edge function for each issue
+          const { data, error } = await supabase.functions.invoke('revise-blog-post', {
+            body: JSON.stringify({
+              postId,
+              content: currentContent, // Use the most up-to-date content
+              issue: issue.issue,
+              claim: issue.claim,
+              suggestion: issue.suggestion
+            })
+          });
+
+          if (error) {
+            console.error('Error invoking revise-blog-post function:', error);
+            continue; // Try the next issue
+          }
+
+          if (!data.success || !data.revisedContent) {
+            console.error('Failed to revise content for issue:', issueIndex);
+            continue; // Try the next issue
+          }
+
+          // Update the current content for the next iteration
+          currentContent = data.revisedContent;
+          
+          // Mark this issue as fixed
+          newlyFixedIssues.add(issueIndex);
+          
+          successCount++;
+        } catch (err) {
+          console.error(`Error processing issue ${issueIndex}:`, err);
+          // Continue with the next issue
+        }
       }
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === "severity") {
-        const severityOrder = { critical: 0, major: 1, minor: 2, undefined: 3 };
-        const aSeverity = a.severity || 
-          (a.issue.toLowerCase().includes("incorrect") || 
-           a.issue.toLowerCase().includes("false") ? 
-            "critical" : "major");
-        const bSeverity = b.severity || 
-          (b.issue.toLowerCase().includes("incorrect") || 
-           b.issue.toLowerCase().includes("false") ? 
-            "critical" : "major");
-        return severityOrder[aSeverity as keyof typeof severityOrder] - 
-               severityOrder[bSeverity as keyof typeof severityOrder];
+      
+      // Update all fixed issues at once
+      if (newlyFixedIssues.size > 0) {
+        setFixedIssues(prev => {
+          const newSet = new Set(prev);
+          newlyFixedIssues.forEach(index => newSet.add(index));
+          return newSet;
+        });
       }
-      if (sortBy === "confidence" && a.confidence && b.confidence) {
-        return b.confidence - a.confidence;
+
+      // Update the content in the parent component with the final version
+      if (successCount > 0 && onContentUpdated) {
+        // Convert the Set to an Array for passing to the parent
+        const fixedIndicesArray = Array.from(newlyFixedIssues);
+        onContentUpdated(currentContent, fixedIndicesArray);
+        
+        // Update the issues array to mark fixed issues as resolved
+        const updatedIssues = [...issues];
+        newlyFixedIssues.forEach(index => {
+          updatedIssues[index] = {
+            ...updatedIssues[index],
+            resolved: true
+          };
+        });
+        
+        // Force a re-render of the component by updating the parent's issues array
+        if (onContentUpdated) {
+          // We're using onContentUpdated as a proxy to communicate with the parent
+          // This is a bit of a hack, but it works for now
+          setTimeout(() => {
+            // Force a re-render after the state updates have been applied
+            setFixedIssues(prev => new Set(prev));
+          }, 100);
+        }
+        
+        toast({
+          title: "Success",
+          description: `${successCount} ${successCount === 1 ? 'issue has' : 'issues have'} been revised successfully!`,
+        });
+      } else {
+        throw new Error("No issues were successfully revised");
       }
-      // Default to newest
-      return 0;
-    });
+    } catch (error) {
+      console.error('Error revising all content:', error);
+      
+      toast({
+        title: "Error",
+        description: "Failed to revise all content. Please try addressing issues individually.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFixingAll(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -269,148 +368,72 @@ const FactCheckResults = ({
     );
   }
 
+  // Filter out ignored issues
+  const activeIssues = issues.filter(issue => !issue.ignored);
+  // Count unfixed active issues - consider both fixedIssues state and resolved flag
+  const unfixedActiveIssues = activeIssues.filter(issue => 
+    !fixedIssues.has(issues.indexOf(issue)) && !issue.resolved
+  );
+  
+  // Determine if all issues have been addressed
+  const allIssuesAddressed = activeIssues.length > 0 && unfixedActiveIssues.length === 0;
+
   return (
-    <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
-      <CardHeader className="pb-0">
-        <CardTitle className="text-white text-xl flex items-center">
-          <AlertTriangle className="h-5 w-5 text-yellow-500 mr-2" />
-          Fact Check Results
-          <span className="ml-2 text-sm bg-[#2a2f4d] px-2 py-0.5 rounded-full text-gray-300">
-            {issues.length} {issues.length === 1 ? 'issue' : 'issues'}
-          </span>
-        </CardTitle>
-
-        <div className="flex items-center justify-between mt-4">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="bg-transparent border-[#2a2f4d] text-gray-300 hover:bg-[#2a2f5d]">
-                <Filter className="mr-2 h-4 w-4" />
-                {filterBy === "all" ? "All issues" : 
-                 filterBy === "fixed" ? "Fixed issues" :
-                 filterBy === "unfixed" ? "Unfixed issues" :
-                 `${filterBy.charAt(0).toUpperCase() + filterBy.slice(1)} severity`}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="bg-[#1a1f3d] border-[#2a2f4d] text-gray-200">
-              <DropdownMenuLabel>Filter By</DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-[#2a2f4d]" />
-              <DropdownMenuItem 
-                className={filterBy === "all" ? "bg-[#2a2f5d]" : "hover:bg-[#2a2f5d]"}
-                onClick={() => setFilterBy("all")}
-              >
-                All issues
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                className={filterBy === "unfixed" ? "bg-[#2a2f5d]" : "hover:bg-[#2a2f5d]"}
-                onClick={() => setFilterBy("unfixed")}
-              >
-                Unfixed issues
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                className={filterBy === "fixed" ? "bg-[#2a2f5d]" : "hover:bg-[#2a2f5d]"}
-                onClick={() => setFilterBy("fixed")}
-              >
-                Fixed issues
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-[#2a2f4d]" />
-              <DropdownMenuItem 
-                className={filterBy === "critical" ? "bg-[#2a2f5d]" : "hover:bg-[#2a2f5d]"}
-                onClick={() => setFilterBy("critical")}
-              >
-                Critical severity
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                className={filterBy === "major" ? "bg-[#2a2f5d]" : "hover:bg-[#2a2f5d]"}
-                onClick={() => setFilterBy("major")}
-              >
-                Major severity
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                className={filterBy === "minor" ? "bg-[#2a2f5d]" : "hover:bg-[#2a2f5d]"}
-                onClick={() => setFilterBy("minor")}
-              >
-                Minor severity
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="bg-transparent border-[#2a2f4d] text-gray-300 hover:bg-[#2a2f5d]">
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Sort: {sortBy.charAt(0).toUpperCase() + sortBy.slice(1)}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="bg-[#1a1f3d] border-[#2a2f4d] text-gray-200">
-              <DropdownMenuLabel>Sort By</DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-[#2a2f4d]" />
-              <DropdownMenuItem 
-                className={sortBy === "newest" ? "bg-[#2a2f5d]" : "hover:bg-[#2a2f5d]"}
-                onClick={() => setSortBy("newest")}
-              >
-                Newest
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                className={sortBy === "severity" ? "bg-[#2a2f5d]" : "hover:bg-[#2a2f5d]"}
-                onClick={() => setSortBy("severity")}
-              >
-                Severity
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                className={sortBy === "confidence" ? "bg-[#2a2f5d]" : "hover:bg-[#2a2f5d]"}
-                onClick={() => setSortBy("confidence")}
-              >
-                Confidence
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </CardHeader>
-      
-      <CardContent className="pt-4">
+    <div className="space-y-4">
+      {/* Issues list */}
+      <div className="space-y-2">
         <AnimatePresence>
-          {processedIssues.map((issue, index) => {
-            const originalIndex = issues.indexOf(issue);
-            return (
+          {activeIssues.length === 0 || allIssuesAddressed ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center justify-center py-6 text-center"
+            >
+              <CheckCircle className="h-12 w-12 text-emerald-500 mb-2" />
+              <p className="text-gray-300">All issues have been addressed!</p>
+            </motion.div>
+          ) : (
+            activeIssues.map((issue, index) => (
               <FactCheckIssueCard
-                key={originalIndex}
+                key={`issue-${index}`}
                 issue={issue}
-                index={originalIndex}
-                isRetrying={retryingIssues.has(originalIndex)}
-                isFixing={fixingIssues.has(originalIndex)}
-                isFixed={fixedIssues.has(originalIndex)}
-                onRetry={() => handleRetryFactCheck(originalIndex)}
-                onRevise={() => handleReviseIssue(originalIndex)}
-                onIgnore={() => handleIgnoreIssue(originalIndex)}
+                index={issues.indexOf(issue)}
+                isRetrying={retryingIssues.has(issues.indexOf(issue))}
+                isFixing={fixingIssues.has(issues.indexOf(issue))}
+                isFixed={fixedIssues.has(issues.indexOf(issue)) || issue.resolved}
+                onRetry={() => handleRetryFactCheck(issues.indexOf(issue))}
+                onRevise={() => handleReviseIssue(issues.indexOf(issue))}
+                onIgnore={() => handleIgnoreIssue(issues.indexOf(issue))}
               />
-            );
-          })}
+            ))
+          )}
         </AnimatePresence>
+      </div>
 
-        {processedIssues.length === 0 && (
-          <div className="text-center py-8 text-gray-400">
-            No issues match your current filter settings
-          </div>
-        )}
-      </CardContent>
-
-      {processedIssues.length > 0 && (
-        <CardFooter className="flex justify-between border-t border-[#2a2f4d] pt-4">
-          <div className="text-sm text-gray-400">
-            Showing {processedIssues.length} of {issues.length} issues
-          </div>
+      {/* Revise All button - only show if there are unfixed active issues */}
+      {unfixedActiveIssues.length > 0 && (
+        <div className="flex justify-center mt-6 border-t border-[#2a2f4d] pt-6">
           <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setFilterBy("all")}
-            className="bg-transparent border-[#2a2f4d] text-gray-300 hover:bg-[#2a2f5d]"
-            disabled={filterBy === "all"}
+            onClick={handleReviseAll}
+            disabled={isFixingAll}
+            className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none px-6"
           >
-            Show all
+            {isFixingAll ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Revising All Issues...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-5 w-5" />
+                Revise All Issues ({unfixedActiveIssues.length})
+              </>
+            )}
           </Button>
-        </CardFooter>
+        </div>
       )}
-    </Card>
+    </div>
   );
 };
 

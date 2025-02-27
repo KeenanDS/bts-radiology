@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { 
@@ -58,84 +57,13 @@ const FactCheckIssueCard = ({
      issue.issue.toLowerCase().includes("false") ? 
       "critical" : "major");
 
-  // Map severity to UI elements
+  // Map severity to UI elements - Removing all badges as requested
   const getSeverityBadge = () => {
-    switch (severity) {
-      case "critical":
-        return (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge variant="destructive" className="ml-2 font-medium">
-                  <AlertCircle className="h-3 w-3 mr-1" />
-                  Critical
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Critical issues contain factually incorrect information that should be fixed immediately.</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        );
-      case "major":
-        return (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge variant="default" className="ml-2 bg-yellow-600 hover:bg-yellow-700 font-medium">
-                  <AlertTriangle className="h-3 w-3 mr-1" />
-                  Major
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Major issues contain potentially misleading information that should be addressed.</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        );
-      case "minor":
-        return (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge variant="outline" className="ml-2 text-blue-400 border-blue-400 font-medium">
-                  <AlertOctagon className="h-3 w-3 mr-1" />
-                  Minor
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Minor issues are style or context concerns that may need clarification.</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        );
-      default:
-        return null;
-    }
+    return null;
   };
 
-  // Confidence score UI element (if provided)
-  const confidenceScore = issue.confidence ? (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Badge 
-            variant="outline" 
-            className={`ml-auto ${
-              issue.confidence > 80 ? "border-green-500 text-green-500" : 
-              issue.confidence > 50 ? "border-yellow-500 text-yellow-500" : 
-              "border-red-500 text-red-500"
-            }`}
-          >
-            {issue.confidence}% confidence
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Confidence score indicates how certain our fact-checking system is about this issue. Higher is more certain.</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  ) : null;
+  // Confidence score UI element - Removing as requested
+  const confidenceScore = null;
 
   // If the issue is ignored, display in a muted style
   if (issue.ignored) {
@@ -150,7 +78,6 @@ const FactCheckIssueCard = ({
         <div className="flex justify-between items-center">
           <div className="flex items-center">
             <span className="text-gray-400 font-medium">Issue #{index + 1} (Ignored)</span>
-            {getSeverityBadge()}
           </div>
           <Button
             variant="ghost"
@@ -173,7 +100,7 @@ const FactCheckIssueCard = ({
       transition={{ duration: 0.3 }}
       className={`p-4 rounded-md mb-4 ${
         isFixed
-          ? "bg-green-900/20 border border-green-500/30"
+          ? "bg-[#1a1f3d]/80 border border-emerald-500/30"
           : "bg-[#1a1f3d] border border-[#2a2f4d]"
       }`}
     >
@@ -192,9 +119,7 @@ const FactCheckIssueCard = ({
                 <ChevronDown className="h-5 w-5" />
               )}
             </Button>
-            <span className="text-yellow-400 font-medium">Issue #{index + 1}</span>
-            {getSeverityBadge()}
-            {confidenceScore}
+            <span className="text-white font-medium">Issue #{index + 1}</span>
           </div>
           {issue.source && (
             <TooltipProvider>
@@ -224,84 +149,70 @@ const FactCheckIssueCard = ({
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
-            className="space-y-4"
+            className="space-y-5 mt-3"
           >
             <div>
-              <p className="text-yellow-400 font-medium mb-1">Claim:</p>
-              <p className="text-gray-300 text-sm bg-[#111936] p-3 rounded border border-[#2a2f4d]">
-                "{issue.claim}"
-              </p>
+              <p className="text-white font-medium mb-2 text-sm uppercase tracking-wide">Claim:</p>
+              <div className="bg-[#111936] p-4 rounded border border-[#2a2f4d]">
+                <p className="text-gray-300 text-sm leading-relaxed">"{issue.claim}"</p>
+              </div>
             </div>
 
             <div>
-              <p className="text-red-400 font-medium mb-1">Issue:</p>
-              <p className="text-gray-300 text-sm">{issue.issue}</p>
+              <p className="text-white font-medium mb-2 text-sm uppercase tracking-wide">Issue:</p>
+              <div className="bg-[#111936] p-4 rounded border border-[#2a2f4d]">
+                <p className="text-gray-300 text-sm leading-relaxed">{issue.issue}</p>
+              </div>
             </div>
 
             <div>
-              <p className="text-green-400 font-medium mb-1">Suggestion:</p>
-              <p className="text-gray-300 text-sm">{issue.suggestion}</p>
+              <p className="text-white font-medium mb-2 text-sm uppercase tracking-wide">Suggestion:</p>
+              <div className="bg-[#111936] p-4 rounded border border-[#2a2f4d]">
+                <p className="text-gray-300 text-sm leading-relaxed">{issue.suggestion}</p>
+              </div>
             </div>
 
-            <div className="flex justify-end mt-4 space-x-2">
+            <div className="flex justify-end mt-5 space-x-2">
               {!isFixed && !issue.resolved && (
                 <>
                   <Button
                     onClick={onIgnore}
-                    disabled={isRetrying || isFixing}
-                    variant="outline"
-                    className="bg-transparent border-[#2a2f4d] text-gray-300 hover:bg-[#2a2f5d] hover:text-white"
+                    variant="ghost"
+                    size="sm"
+                    className="text-gray-400 hover:text-white hover:bg-[#2a2f5d]"
                   >
-                    <XCircle className="mr-2 h-4 w-4" />
+                    <XCircle className="h-4 w-4 mr-1" />
                     Ignore
                   </Button>
+                  
                   <Button
-                    onClick={onRetry}
-                    disabled={isRetrying || isFixing}
+                    onClick={onRevise}
                     variant="outline"
-                    className="bg-transparent border-[#2a2f4d] text-gray-300 hover:bg-[#2a2f5d] hover:text-white"
+                    size="sm"
+                    disabled={isFixing}
+                    className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none"
                   >
-                    {isRetrying ? (
+                    {isFixing ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Verifying...
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        Revising...
                       </>
                     ) : (
                       <>
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        Verify
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Revise
                       </>
                     )}
                   </Button>
                 </>
               )}
 
-              <Button
-                onClick={onRevise}
-                disabled={isFixing || isFixed || issue.resolved}
-                className={
-                  isFixed || issue.resolved
-                    ? "bg-green-600 hover:bg-green-600 cursor-not-allowed"
-                    : "bg-[#2a2f5d] hover:bg-[#3a3f7d]"
-                }
-              >
-                {isFixing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Revising...
-                  </>
-                ) : isFixed || issue.resolved ? (
-                  <>
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Revised
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Revise
-                  </>
-                )}
-              </Button>
+              {isFixed && (
+                <div className="flex items-center text-emerald-500 text-sm">
+                  <CheckCircle className="h-4 w-4 mr-1" />
+                  Issue addressed
+                </div>
+              )}
             </div>
           </motion.div>
         )}
