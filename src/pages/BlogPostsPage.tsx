@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,7 +19,11 @@ interface BlogPost {
   updated_at: string;
   fact_check_results?: {
     id: string;
-    issues: any[];
+    issues: Array<{
+      claim: string;
+      issue: string;
+      suggestion?: string;
+    }>;
     checked_at: string;
   } | null;
 }
@@ -29,6 +32,7 @@ const BlogPostsPage = () => {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [pdfGenerating, setPdfGenerating] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -71,6 +75,15 @@ const BlogPostsPage = () => {
     setSortOrder(sortOrder === "asc" ? "desc" : "asc");
   };
 
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
   const downloadAsMarkdown = (post: BlogPost) => {
     const mdContent = `# ${post.title}\n\n${post.content}`;
     const blob = new Blob([mdContent], { type: "text/markdown" });
@@ -82,13 +95,19 @@ const BlogPostsPage = () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Success",
+      description: "Markdown file downloaded successfully!",
+    });
   };
 
   const downloadAsPDF = async (post: BlogPost) => {
     try {
+      setPdfGenerating(post.id);
       toast({
         title: "Processing",
-        description: "Converting Markdown to PDF...",
+        description: "Converting to PDF, please wait...",
       });
 
       const { data, error } = await supabase.functions.invoke("markdown-to-pdf", {
@@ -98,49 +117,45 @@ const BlogPostsPage = () => {
         }),
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("PDF generation error:", error);
+        throw new Error("Failed to generate PDF");
+      }
 
-      if (data?.pdfBase64) {
-        const binary = atob(data.pdfBase64);
-        const array = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          array[i] = binary.charCodeAt(i);
-        }
-        
-        const blob = new Blob([array], { type: "application/pdf" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${post.title.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        toast({
-          title: "Success",
-          description: "PDF downloaded successfully!",
-        });
-      } else {
+      if (!data?.pdfBase64) {
         throw new Error("No PDF data received");
       }
+
+      const binary = atob(data.pdfBase64);
+      const array = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        array[i] = binary.charCodeAt(i);
+      }
+      
+      const blob = new Blob([array], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${post.title.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "Success",
+        description: "PDF downloaded successfully!",
+      });
     } catch (error) {
       console.error("Error downloading PDF:", error);
       toast({
         title: "Error",
-        description: "Failed to download PDF. Please try again.",
+        description: "Failed to generate PDF. Please try again or download as Markdown instead.",
         variant: "destructive",
       });
+    } finally {
+      setPdfGenerating(null);
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
   };
 
   return (
@@ -231,9 +246,14 @@ const BlogPostsPage = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => downloadAsPDF(post)}
+                          disabled={pdfGenerating === post.id}
                           className="bg-[#1a1f3d] border-[#2a2f4d] text-white hover:bg-[#2a2f5d]"
                         >
-                          <Download className="h-4 w-4 mr-1" />
+                          {pdfGenerating === post.id ? (
+                            <Clock className="h-4 w-4 animate-spin mr-1" />
+                          ) : (
+                            <Download className="h-4 w-4 mr-1" />
+                          )}
                           PDF
                         </Button>
                       </div>
