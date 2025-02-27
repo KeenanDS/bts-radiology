@@ -1,13 +1,14 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, Loader2, CheckCircle } from "lucide-react";
-import { motion } from "framer-motion";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Save, Loader2, CheckCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import FactCheckResults from "./FactCheckResults";
@@ -37,6 +38,8 @@ interface FactCheckIssue {
   suggestion: string;
   source?: string;
   resolved?: boolean;
+  severity?: "critical" | "major" | "minor";
+  confidence?: number;
 }
 
 const GeneratedPost = ({ 
@@ -52,7 +55,7 @@ const GeneratedPost = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isFactChecking, setIsFactChecking] = useState(false);
   const [factCheckIssues, setFactCheckIssues] = useState<FactCheckIssue[]>([]);
-  const [showFactCheck, setShowFactCheck] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("content");
   const [currentContent, setCurrentContent] = useState(generatedPost);
   const [postId, setPostId] = useState<string | null>(null);
   const { toast } = useToast();
@@ -125,18 +128,40 @@ const GeneratedPost = ({
       return [];
     }
 
-    return rawIssues.map(issue => ({
-      claim: issue.quote,
-      issue: issue.explanation,
-      suggestion: issue.correction,
-      source: issue.source,
-      resolved: false
-    }));
+    return rawIssues.map(issue => {
+      // Determine severity based on content of the explanation
+      let severity: "critical" | "major" | "minor" = "major";
+      
+      const explanation = issue.explanation.toLowerCase();
+      if (explanation.includes("incorrect") || 
+          explanation.includes("false") || 
+          explanation.includes("misleading")) {
+        severity = "critical";
+      } else if (explanation.includes("outdated") || 
+                explanation.includes("needs context") ||
+                explanation.includes("ambiguous")) {
+        severity = "minor";
+      }
+      
+      // Generate a random confidence score between 60-98 for demo purposes
+      // In a real implementation, this would come from the API
+      const confidence = Math.floor(Math.random() * 39) + 60;
+      
+      return {
+        claim: issue.quote,
+        issue: issue.explanation,
+        suggestion: issue.correction,
+        source: issue.source,
+        resolved: false,
+        severity,
+        confidence
+      };
+    });
   };
 
   const handleFactCheck = async () => {
     setIsFactChecking(true);
-    setShowFactCheck(true);
+    setActiveTab("fact-check");
     
     try {
       // Log the content being sent for fact-checking
@@ -216,148 +241,192 @@ const GeneratedPost = ({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: 0.2 }}
-      className="grid grid-cols-1 md:grid-cols-5 gap-6"
+      transition={{ duration: 0.3 }}
+      className="w-full space-y-6"
     >
-      <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50 md:col-span-3">
-        <CardHeader className="flex flex-row items-center justify-between">
+      {/* Header card with title and primary actions */}
+      <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
           <div>
-            <CardTitle className="text-white text-2xl">Generated Blog Post</CardTitle>
+            <CardTitle className="text-white text-2xl">{topic}</CardTitle>
             <CardDescription className="text-gray-400">
-              Your AI-generated blog post based on the provided topic.
+              AI-generated blog post based on your topic
             </CardDescription>
           </div>
-          {!isSaved ? (
-            <Button 
-              className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none"
-              onClick={handleSave}
-              disabled={isSaving || !selectedMetaDescription}
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Post
-                </>
-              )}
-            </Button>
-          ) : (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none"
-                    onClick={handleFactCheck}
-                    disabled={isFactChecking}
-                  >
-                    {isFactChecking ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Checking...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Fact Check
-                      </>
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Verify the accuracy of the generated content</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-        </CardHeader>
-        <CardContent>
-          <div className="prose prose-invert max-w-none">
-            <div className="whitespace-pre-wrap bg-[#1a1f3d] p-4 rounded-md text-gray-200 font-mono text-sm overflow-auto max-h-[600px]">
-              {currentContent}
-            </div>
+          <div className="flex space-x-2">
+            {!isSaved ? (
+              <Button 
+                className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none"
+                onClick={handleSave}
+                disabled={isSaving || !selectedMetaDescription}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Post
+                  </>
+                )}
+              </Button>
+            ) : (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none"
+                      onClick={handleFactCheck}
+                      disabled={isFactChecking}
+                    >
+                      {isFactChecking ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Checking...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Fact Check
+                        </>
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Verify the accuracy of the generated content</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
+        </CardHeader>
+        
+        <CardContent className="pb-2">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="w-full grid grid-cols-2 bg-[#1a1f3d]">
+              <TabsTrigger value="content" className="data-[state=active]:bg-[#2a2f5d]">
+                Content
+              </TabsTrigger>
+              <TabsTrigger 
+                value="fact-check" 
+                className="data-[state=active]:bg-[#2a2f5d]"
+                disabled={!isSaved}
+              >
+                Fact Check {factCheckIssues.length > 0 && 
+                  <span className="ml-2 bg-yellow-600 text-white text-xs rounded-full px-2 py-0.5">
+                    {factCheckIssues.length}
+                  </span>
+                }
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="content" className="mt-4 space-y-4">
+              <div className="prose prose-invert max-w-none">
+                <div className="whitespace-pre-wrap bg-[#1a1f3d] p-4 rounded-md text-gray-200 font-mono text-sm overflow-auto max-h-[600px]">
+                  {currentContent}
+                </div>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="fact-check" className="mt-4">
+              <AnimatePresence mode="wait">
+                {isSaved && (
+                  <FactCheckResults 
+                    issues={factCheckIssues}
+                    isLoading={isFactChecking}
+                    postId={postId}
+                    content={currentContent}
+                    onContentUpdated={handleContentUpdated}
+                  />
+                )}
+              </AnimatePresence>
+            </TabsContent>
+          </Tabs>
         </CardContent>
-      </Card>
 
-      <div className="md:col-span-2">
-        {showFactCheck ? (
-          <FactCheckResults 
-            issues={factCheckIssues}
-            isLoading={isFactChecking}
-            postId={postId}
-            content={currentContent}
-            onContentUpdated={handleContentUpdated}
-          />
-        ) : (
-          <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
-            <CardHeader>
-              <CardTitle className="text-white text-xl">Meta Description</CardTitle>
-              <CardDescription className="text-gray-400">
-                Select the best meta description for SEO.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+        {activeTab === "content" && (
+          <CardFooter className="border-t border-[#2a2f4d] pt-4">
+            <div className="w-full">
+              <h3 className="text-white text-sm font-medium mb-3">Meta Description</h3>
               {isGeneratingMeta ? (
                 <div className="flex items-center justify-center py-4">
                   <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
                   <span className="ml-2 text-gray-400">Generating descriptions...</span>
                 </div>
               ) : metaDescriptions.length > 0 ? (
-                <RadioGroup
-                  value={selectedMetaDescription}
-                  onValueChange={setSelectedMetaDescription}
-                  className="space-y-4"
-                >
-                  {metaDescriptions.map((description, index) => (
-                    <div key={index} className="flex items-start space-x-2">
-                      <RadioGroupItem
-                        value={description}
-                        id={`option-${index}`}
-                        className="border-gray-600 text-white"
-                      />
-                      <Label
-                        htmlFor={`option-${index}`}
-                        className="text-sm text-gray-300 cursor-pointer leading-relaxed"
-                      >
-                        {description}
-                      </Label>
+                <div className="space-y-4">
+                  <RadioGroup
+                    value={selectedMetaDescription}
+                    onValueChange={setSelectedMetaDescription}
+                    className="space-y-4"
+                  >
+                    {metaDescriptions.map((description, index) => (
+                      <div key={index} className="flex items-start space-x-2 bg-[#1a1f3d] p-3 rounded-md hover:bg-[#2a2f5d] transition-colors">
+                        <RadioGroupItem
+                          value={description}
+                          id={`option-${index}`}
+                          className="border-gray-600 text-white mt-1"
+                        />
+                        <Label
+                          htmlFor={`option-${index}`}
+                          className="text-sm text-gray-300 cursor-pointer leading-relaxed"
+                        >
+                          {description}
+                        </Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                  
+                  {selectedMetaDescription && (
+                    <div className="mt-4 p-3 border border-[#2a2f4d] rounded-md">
+                      <h4 className="text-white text-sm font-medium mb-2">Search Result Preview</h4>
+                      <div className="bg-white rounded-md p-3 text-black">
+                        <div className="text-[#1a0dab] text-lg font-medium hover:underline cursor-pointer truncate">
+                          {topic}
+                        </div>
+                        <div className="text-[#006621] text-xs mb-1">
+                          www.beyondthescan.com
+                        </div>
+                        <div className="text-sm text-[#545454] min-h-[60px]">
+                          {selectedMetaDescription}
+                        </div>
+                      </div>
                     </div>
-                  ))}
-                </RadioGroup>
+                  )}
+                </div>
               ) : (
                 <p className="text-gray-500">No meta descriptions generated yet.</p>
               )}
-              
-              {selectedMetaDescription && (
-                <>
-                  <Separator className="my-4 bg-[#2a2f4d] opacity-50" />
-                  
-                  <div className="mt-4">
-                    <h4 className="text-white text-sm font-medium mb-2">Search Result Preview</h4>
-                    <div className="bg-white rounded-md p-3 text-black">
-                      <div className="text-[#1a0dab] text-lg font-medium hover:underline cursor-pointer truncate">
-                        {topic}
-                      </div>
-                      <div className="text-[#006621] text-xs mb-1">
-                        www.beyondthescan.com
-                      </div>
-                      <div className="text-sm text-[#545454] min-h-[60px]">
-                        {selectedMetaDescription}
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-2">
-                      This is how your meta description will appear in search results.
-                    </p>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+            </div>
+          </CardFooter>
         )}
+      </Card>
+      
+      {/* Navigation controls for mobile views */}
+      <div className="md:hidden flex justify-between">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setActiveTab("content")}
+          disabled={activeTab === "content"}
+          className="bg-[#1a1f3d] hover:bg-[#2a2f5d]"
+        >
+          <ChevronLeft className="h-4 w-4 mr-2" />
+          Content
+        </Button>
+        
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setActiveTab("fact-check")}
+          disabled={activeTab === "fact-check" || !isSaved}
+          className="bg-[#1a1f3d] hover:bg-[#2a2f5d]"
+        >
+          Fact Check
+          <ChevronRight className="h-4 w-4 ml-2" />
+        </Button>
       </div>
     </motion.div>
   );
