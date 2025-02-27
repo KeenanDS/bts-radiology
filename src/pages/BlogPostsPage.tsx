@@ -79,9 +79,13 @@ const BlogPostsPage = () => {
           factCheckResults = {
             id: rawResults.id,
             checked_at: rawResults.checked_at,
-            // Ensure issues is treated as the correct type
+            // Properly map the issues array with type safety
             issues: Array.isArray(rawResults.issues) 
-              ? rawResults.issues as FactCheckIssue[]
+              ? rawResults.issues.map((issue: any): FactCheckIssue => ({
+                  claim: issue.claim || "",
+                  issue: issue.issue || "",
+                  suggestion: issue.suggestion
+                }))
               : []
           };
         }
