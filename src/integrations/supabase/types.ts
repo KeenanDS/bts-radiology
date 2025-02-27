@@ -36,6 +36,41 @@ export type Database = {
         }
         Relationships: []
       }
+      fact_check_results: {
+        Row: {
+          checked_at: string
+          created_at: string
+          id: string
+          issues: Json
+          post_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          checked_at?: string
+          created_at?: string
+          id?: string
+          issues?: Json
+          post_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          checked_at?: string
+          created_at?: string
+          id?: string
+          issues?: Json
+          post_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fact_check_results_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: true
+            referencedRelation: "blog_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

@@ -19,7 +19,6 @@ const AdminDashboard = () => {
   const [topic, setTopic] = useState("");
   const [additionalInfo, setAdditionalInfo] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [topicUpdated, setTopicUpdated] = useState(false);
   const [showPostForm, setShowPostForm] = useState(true);
   const [generatedPost, setGeneratedPost] = useState("");
   const [isGeneratingPost, setIsGeneratingPost] = useState(false);
@@ -29,15 +28,12 @@ const AdminDashboard = () => {
   const topicInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  // Log when post generation completes
   useEffect(() => {
-    if (topicUpdated) {
-      toast({
-        title: "Topic Generated",
-        description: "A new topic has been generated successfully.",
-      });
-      setTopicUpdated(false);
+    if (generatedPost) {
+      console.log("Post generation complete. Content length:", generatedPost.length);
     }
-  }, [topicUpdated, toast]);
+  }, [generatedPost]);
 
   const generateTopic = async () => {
     setIsGenerating(true);
@@ -48,8 +44,20 @@ const AdminDashboard = () => {
         throw error;
       }
 
-      setTopic(data.topic);
-      setTopicUpdated(true);
+      if (data?.topic) {
+        // Update topic state and ensure the input field is updated
+        setTopic(data.topic);
+        if (topicInputRef.current) {
+          topicInputRef.current.value = data.topic;
+        }
+
+        toast({
+          title: "Topic Generated",
+          description: "A new topic has been generated successfully.",
+        });
+      } else {
+        throw new Error('No topic was generated');
+      }
     } catch (error) {
       console.error('Error:', error);
       toast({
@@ -63,6 +71,9 @@ const AdminDashboard = () => {
   };
 
   const generateMetaDescriptions = async () => {
+    console.log("Generating meta descriptions for:", topic);
+    console.log("Post content length:", generatedPost.length);
+
     setIsGeneratingMeta(true);
     try {
       const { data: metaData, error: metaError } = await supabase.functions
@@ -74,11 +85,16 @@ const AdminDashboard = () => {
         });
 
       if (metaError) {
+        console.error("Meta generation error:", metaError);
         throw metaError;
       }
 
+      console.log("Meta descriptions received:", metaData.descriptions);
       setMetaDescriptions(metaData.descriptions);
-      setSelectedMetaDescription(metaData.descriptions[0]); // Select first option by default
+      // Set the first description as selected by default
+      if (metaData.descriptions && metaData.descriptions.length > 0) {
+        setSelectedMetaDescription(metaData.descriptions[0]);
+      }
       
       toast({
         title: "Success",
@@ -121,17 +137,21 @@ const AdminDashboard = () => {
         throw generationError;
       }
 
-      const postContent = generationData.content;
-      setGeneratedPost(postContent);
-      setShowPostForm(false);
-      
-      // Generate meta descriptions after post is generated
-      await generateMetaDescriptions();
-      
-      toast({
-        title: "Success",
-        description: "Blog post generated successfully!",
-      });
+      if (generationData?.content) {
+        console.log("Blog post generated with length:", generationData.content.length);
+        setGeneratedPost(generationData.content);
+        setShowPostForm(false);
+        
+        // Generate meta descriptions after post is generated
+        await generateMetaDescriptions();
+        
+        toast({
+          title: "Success",
+          description: "Blog post generated successfully!",
+        });
+      } else {
+        throw new Error('No content was generated');
+      }
     } catch (error) {
       console.error('Error:', error);
       toast({
@@ -141,46 +161,6 @@ const AdminDashboard = () => {
       });
     } finally {
       setIsGeneratingPost(false);
-    }
-  };
-
-  const handleSavePost = async () => {
-    if (!selectedMetaDescription) {
-      toast({
-        title: "Error",
-        description: "Please select a meta description before saving.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const { error: saveError } = await supabase
-        .from('blog_posts')
-        .insert([
-          {
-            title: topic,
-            content: generatedPost,
-            meta_description: selectedMetaDescription
-          }
-        ])
-        .single();
-
-      if (saveError) {
-        throw saveError;
-      }
-
-      toast({
-        title: "Success",
-        description: "Blog post saved successfully!",
-      });
-    } catch (error) {
-      console.error('Error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save blog post. Please try again.",
-        variant: "destructive",
-      });
     }
   };
 
@@ -198,11 +178,13 @@ const AdminDashboard = () => {
       <Sidebar />
       
       <div className="flex-1 p-6 bg-gradient-to-br from-[#0a0b17] via-[#111936] to-[#0a0b17]">
-        <div className="max-w-4xl mx-auto space-y-8">
+        <div className="max-w-5xl mx-auto space-y-8">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-white tracking-tight">
-              {currentView === "create" ? "Create New Post" : "Manage Posts"}
-            </h1>
+            <div>
+              <h1 className="text-2xl font-bold text-white tracking-tight">
+                {currentView === "create" ? "Create New Post" : "Manage Posts"}
+              </h1>
+            </div>
             <Link to="/">
               <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white hover:bg-[#1a1f3d]">
                 <ArrowLeft className="h-5 w-5" />
@@ -231,12 +213,11 @@ const AdminDashboard = () => {
                   <GeneratedPost
                     topic={topic}
                     generatedPost={generatedPost}
-                    resetForm={resetForm}
-                    onSave={handleSavePost}
                     metaDescriptions={metaDescriptions}
                     selectedMetaDescription={selectedMetaDescription}
                     setSelectedMetaDescription={setSelectedMetaDescription}
                     isGeneratingMeta={isGeneratingMeta}
+                    resetForm={resetForm}
                   />
                 )}
               </AnimatePresence>
