@@ -1,30 +1,98 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, AlertTriangle, CheckCircle } from "lucide-react";
+import { Loader2, AlertTriangle, CheckCircle, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface FactCheckIssue {
   claim: string;
   issue: string;
   suggestion: string;
+  source?: string;
+  resolved?: boolean;
 }
 
 interface FactCheckResultsProps {
   issues: FactCheckIssue[];
   isLoading: boolean;
+  postId?: string;
+  onContentUpdated?: (newContent: string) => void;
+  content?: string;
 }
 
-const FactCheckResults = ({ issues, isLoading }: FactCheckResultsProps) => {
+const FactCheckResults = ({ issues, isLoading, postId, onContentUpdated, content }: FactCheckResultsProps) => {
+  const [fixingIssues, setFixingIssues] = useState<Set<number>>(new Set());
   const [fixedIssues, setFixedIssues] = useState<Set<number>>(new Set());
+  const { toast } = useToast();
 
-  const handleFixIssue = (index: number) => {
-    setFixedIssues(prev => {
+  const handleReviseIssue = async (index: number) => {
+    if (!postId || !content) {
+      toast({
+        title: "Error",
+        description: "Missing post ID or content for revision.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const issue = issues[index];
+    
+    setFixingIssues(prev => {
       const newSet = new Set(prev);
       newSet.add(index);
       return newSet;
     });
+
+    try {
+      const { data, error } = await supabase.functions.invoke('fact-check-post', {
+        body: JSON.stringify({
+          action: 'revise',
+          postId,
+          issueIndex: index,
+          claim: issue.claim,
+          issue: issue.issue,
+          suggestion: issue.suggestion,
+          content
+        })
+      });
+
+      if (error) throw error;
+
+      if (data.success && data.revisedContent) {
+        // Update the content in the parent component
+        if (onContentUpdated) {
+          onContentUpdated(data.revisedContent);
+        }
+        
+        setFixedIssues(prev => {
+          const newSet = new Set(prev);
+          newSet.add(index);
+          return newSet;
+        });
+        
+        toast({
+          title: "Success",
+          description: "Content has been revised successfully!",
+        });
+      } else {
+        throw new Error("Failed to revise content");
+      }
+    } catch (error) {
+      console.error('Error revising content:', error);
+      toast({
+        title: "Error",
+        description: "Failed to revise content. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setFixingIssues(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(index);
+        return newSet;
+      });
+    }
   };
 
   if (isLoading) {
@@ -80,23 +148,47 @@ const FactCheckResults = ({ issues, isLoading }: FactCheckResultsProps) => {
               <p className="text-green-400 font-medium">Suggestion:</p>
               <p className="text-gray-300 text-sm">{issue.suggestion}</p>
               
+              {issue.source && (
+                <>
+                  <p className="text-blue-400 font-medium">Source:</p>
+                  <p className="text-gray-300 text-sm">
+                    <a 
+                      href={issue.source} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:underline"
+                    >
+                      {issue.source}
+                    </a>
+                  </p>
+                </>
+              )}
+              
               <div className="flex justify-end mt-4">
                 <Button
-                  onClick={() => handleFixIssue(index)}
-                  disabled={fixedIssues.has(index)}
+                  onClick={() => handleReviseIssue(index)}
+                  disabled={fixingIssues.has(index) || fixedIssues.has(index) || issue.resolved}
                   className={
-                    fixedIssues.has(index)
+                    fixedIssues.has(index) || issue.resolved
                       ? "bg-green-600 hover:bg-green-600 cursor-not-allowed"
                       : "bg-[#2a2f5d] hover:bg-[#3a3f7d]"
                   }
                 >
-                  {fixedIssues.has(index) ? (
+                  {fixingIssues.has(index) ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Revising...
+                    </>
+                  ) : fixedIssues.has(index) || issue.resolved ? (
                     <>
                       <CheckCircle className="mr-2 h-4 w-4" />
-                      Fixed
+                      Revised
                     </>
                   ) : (
-                    "Mark as Fixed"
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Revise
+                    </>
                   )}
                 </Button>
               </div>

@@ -1,8 +1,45 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Define the interfaces
+interface Issue {
+  claim: string;
+  issue: string;
+  suggestion: string;
+  source?: string;
+  resolved?: boolean;
+}
+
+interface RevisionRequest {
+  postId: string;
+  issueIndex: number;
+  claim: string;
+  issue: string;
+  suggestion: string;
+  content: string;
+}
+
+// Make sure these environment variables are set in your Supabase project
 const perplexityApiKey = Deno.env.get('PERPLEXITY_API_KEY');
+const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+// Log if API keys are missing
+if (!perplexityApiKey) {
+  console.error('PERPLEXITY_API_KEY environment variable is not set!');
+}
+
+if (!openaiApiKey) {
+  console.error('OPENAI_API_KEY environment variable is not set!');
+}
+
+// Initialize Supabase client with service role key for admin operations
+const supabase = createClient(
+  supabaseUrl || '',
+  supabaseServiceKey || ''
+);
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,56 +47,88 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { content } = await req.json();
-    console.log('Received content for fact-checking:', content.substring(0, 100) + '...');
-
-    const prompt = `As a specialized fact-checker for medical and healthcare content, carefully analyze this text. 
+    // Log headers for debugging
+    console.log('Request headers:', Object.fromEntries(req.headers.entries()));
     
-Your primary objectives are to:
+    const requestData = await req.json();
+    console.log('Received request data:', JSON.stringify(requestData, null, 2));
 
-1. Review Factual Claims:
-   - Identify ANY numerical statistics, percentages, or quantitative data
-   - Check for specific dates, timeframes, or temporal claims
-   - Verify claims about research studies or scientific findings
-   - Analyze historical statements or industry developments
-
-2. Scrutinize Healthcare Claims:
-   - Examine statements about medical procedures or treatments
-   - Verify claims about healthcare technology capabilities
-   - Check assertions about industry standards or practices
-   - Review statements about patient outcomes or success rates
-
-3. Evaluate AI-Related Content:
-   - Validate claims about AI capabilities in healthcare
-   - Check statements about AI adoption rates or implementation statistics
-   - Verify predictions about AI's impact on healthcare roles
-   - Review technical specifications or performance metrics
-
-IMPORTANT: For EACH potential issue you find, you MUST provide:
-1. The exact claim or statement from the text (quoted verbatim)
-2. A detailed explanation of why this claim requires verification
-3. A specific suggestion for improvement, such as:
-   - Adding source citations
-   - Including specific timeframes
-   - Qualifying statements with "may," "could," or similar terms
-   - Providing context for statistics
-   - Noting if something is a projection or estimate
-
-Format your response as a JSON array of objects, each with 'claim', 'issue', and 'suggestion' fields.
-If no issues are found, return an empty array but only after thorough verification.
-
-Here's the content to analyze:
-
-${content}`;
-
-    console.log('Sending request to Perplexity API with enhanced prompt...');
+    // Debug environment variables
+    console.log('Environment check:', {
+      hasPerplexityKey: !!perplexityApiKey,
+      hasOpenAIKey: !!openaiApiKey,
+      hasSupabaseUrl: !!supabaseUrl,
+      hasSupabaseKey: !!supabaseServiceKey
+    });
     
-    const response = await fetch('https://api.perplexity.ai/chat/completions', {
+    // Check if this is a fact-check request or a revision request
+    if (requestData.action === 'revise') {
+      return await handleRevision(requestData);
+    } else {
+      return await handleFactCheck(requestData);
+    }
+  } catch (error) {
+    console.error('Error in fact-check-post function:', error);
+    // Return more detailed error information
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      stack: error.stack,
+      type: error.constructor.name,
+      issues: []
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
+
+async function handleFactCheck(requestData: any) {
+  try {
+    console.log('Starting handleFactCheck...');
+    const { content, postId } = requestData;
+    
+    // Debug log the input
+    console.log('Input validation:', {
+      hasContent: !!content,
+      contentType: typeof content,
+      contentLength: content?.length,
+      postId
+    });
+
+    // Basic input validation
+    if (!content || typeof content !== 'string' || content.trim() === '') {
+      console.log('Input validation failed');
+      return new Response(JSON.stringify({ 
+        error: 'Invalid or empty content provided',
+        success: false
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Check for API key
+    if (!perplexityApiKey) {
+      console.log('Missing Perplexity API key');
+      return new Response(JSON.stringify({ 
+        error: 'Perplexity API key is not configured',
+        success: false
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('Attempting to connect to Perplexity API...');
+    
+    // Create fetch options with explicit types
+    const fetchOptions = {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${perplexityApiKey}`,
@@ -69,103 +138,207 @@ ${content}`;
         model: 'sonar-pro',
         messages: [
           {
-            role: 'system',
-            content: `You are an expert fact-checker with specialized knowledge in:
-- Medical research methodology and statistics
-- Healthcare industry trends and standards
-- AI/ML implementation in healthcare settings
-- Evidence-based medicine principles
-- Scientific literature evaluation
-- Regulatory compliance in healthcare
-
-Your primary directives are to:
-1. Be EXTREMELY skeptical of any unsourced statistics or absolute claims
-2. Flag ALL predictive statements about future developments
-3. Question any technological claims lacking specific implementation details
-4. Challenge generalizations about healthcare practices
-5. Identify potential conflicts with established medical evidence
-
-Maintain high standards for verification by:
-- Requiring specific sources for statistical claims
-- Ensuring temporal context for all trend statements
-- Demanding clear qualification of predictive claims
-- Insisting on precise technical specifications
-- Checking for logical consistency throughout`
-          },
-          {
             role: 'user',
-            content: prompt
+            content: 'Test message: ' + content.substring(0, 100)
           }
         ],
-        temperature: 0.1, // Lowered temperature for more consistent, conservative fact-checking
-        max_tokens: 2000,
-        frequency_penalty: 0,
-        presence_penalty: 0
-      }),
+        max_tokens: 50
+      })
+    };
+    
+    console.log('Fetch options (excluding auth):', {
+      method: fetchOptions.method,
+      headers: Object.keys(fetchOptions.headers),
+      bodyPreview: fetchOptions.body.substring(0, 100) + '...'
     });
 
-    const data = await response.json();
-    console.log('Received response from Perplexity API:', JSON.stringify(data, null, 2));
-
-    let issues = [];
-    try {
-      const content = data.choices[0].message.content;
-      if (content) {
-        // First try to parse as direct JSON
-        try {
-          issues = JSON.parse(content);
-          console.log(`Successfully parsed ${issues.length} issues from response`);
-        } catch (parseError) {
-          console.error('Direct JSON parsing failed, attempting to extract JSON structure:', parseError);
-          // If direct parsing fails, try to find and parse any JSON-like structure
-          const jsonMatch = content.match(/\[.*\]/s);
-          if (jsonMatch) {
-            try {
-              issues = JSON.parse(jsonMatch[0]);
-              console.log(`Successfully extracted and parsed ${issues.length} issues from matched content`);
-            } catch (matchError) {
-              console.error('Error parsing JSON from matched content:', matchError);
-              throw new Error('Failed to parse fact-check results');
-            }
-          } else {
-            console.error('No JSON-like structure found in response');
-            throw new Error('Invalid response format from fact-checker');
-          }
-        }
-      }
-
-      // Validate the structure of each issue
-      issues = issues.filter(issue => {
-        const isValid = 
-          issue && 
-          typeof issue === 'object' && 
-          typeof issue.claim === 'string' && 
-          typeof issue.issue === 'string' && 
-          typeof issue.suggestion === 'string';
-        
-        if (!isValid) {
-          console.warn('Filtered out invalid issue:', issue);
-        }
-        return isValid;
+    const response = await fetch('https://api.perplexity.ai/chat/completions', fetchOptions);
+    
+    console.log('API Response:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('API Error Details:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
       });
-
-      console.log(`Final validated issues count: ${issues.length}`);
-    } catch (error) {
-      console.error('Error processing fact-check results:', error);
-      throw new Error('Failed to process fact-check results');
+      return new Response(JSON.stringify({ 
+        error: `API connection failed: ${response.status}`,
+        details: errorText,
+        success: false
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    return new Response(JSON.stringify({ issues }), {
+    // Try to get the raw response text first
+    const rawResponseText = await response.text();
+    console.log('Raw API Response:', rawResponseText);
+
+    return new Response(JSON.stringify({ 
+      success: true,
+      message: 'Successfully connected to API',
+      status: response.status,
+      rawResponse: rawResponseText
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
+
   } catch (error) {
-    console.error('Error in fact-check-post function:', error);
+    console.error('Detailed error:', {
+      message: error.message,
+      stack: error.stack,
+      type: error.constructor.name
+    });
     return new Response(JSON.stringify({ 
-      error: error.message,
-      issues: []
+      error: 'Connection error',
+      details: error.message,
+      stack: error.stack,
+      type: error.constructor.name,
+      success: false
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}
+
+async function handleRevision(requestData: RevisionRequest) {
+  const { postId, issueIndex, claim, issue, suggestion, content } = requestData;
+  
+  // Validate input
+  if (!content || !claim || !issue || !suggestion) {
+    return new Response(JSON.stringify({ 
+      error: 'Missing required fields for revision',
+      success: false
+    }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Check for OpenAI API key
+  if (!openaiApiKey) {
+    return new Response(JSON.stringify({ 
+      error: 'OpenAI API key is not configured',
+      success: false
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    // Call OpenAI to revise the content
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert medical content editor. Your task is to revise a blog post to address a specific factual issue that has been identified. 
+            Make minimal changes to the original text while addressing the issue completely.
+            Maintain the same tone, style, and overall structure of the original content.
+            Only modify the parts directly related to the factual issue.`
+          },
+          {
+            role: 'user',
+            content: `I need you to revise a blog post to address a factual issue.
+
+Original content:
+${content}
+
+The issue is with this claim: "${claim}"
+
+The problem: ${issue}
+
+Suggested improvement: ${suggestion}
+
+Please provide the revised version of the entire blog post with the issue fixed. Return ONLY the revised content, with no explanations or additional text.`
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 2000
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`OpenAI API error (${response.status}):`, errorText);
+      throw new Error(`OpenAI API returned status ${response.status}`);
+    }
+
+    const data = await response.json();
+    const revisedContent = data.choices[0].message.content.trim();
+
+    // Update the blog post in the database
+    if (postId) {
+      const { error } = await supabase
+        .from('blog_posts')
+        .update({ content: revisedContent, updated_at: new Date().toISOString() })
+        .eq('id', postId);
+
+      if (error) {
+        console.error('Error updating blog post:', error);
+        throw new Error('Failed to update blog post: ' + error.message);
+      }
+
+      // Update the fact check results to mark this issue as resolved
+      try {
+        const { data: factCheckData, error: fetchError } = await supabase
+          .from('fact_check_results')
+          .select('issues')
+          .eq('post_id', postId)
+          .single();
+
+        if (fetchError) {
+          console.error('Error fetching fact check results:', fetchError);
+        } else if (factCheckData && factCheckData.issues) {
+          const issues = factCheckData.issues as Issue[];
+          if (issues[issueIndex]) {
+            issues[issueIndex].resolved = true;
+            
+            const { error: updateError } = await supabase
+              .from('fact_check_results')
+              .update({ issues })
+              .eq('post_id', postId);
+              
+            if (updateError) {
+              console.error('Error updating fact check results:', updateError);
+            }
+          }
+        }
+      } catch (factCheckError) {
+        console.error('Error updating fact check status:', factCheckError);
+      }
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      revisedContent,
+      postId
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    console.error('Error in revision process:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      success: false
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+}

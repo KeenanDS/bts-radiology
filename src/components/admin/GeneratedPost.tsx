@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save, Loader2, CheckCircle } from "lucide-react";
@@ -14,7 +14,7 @@ import FactCheckResults from "./FactCheckResults";
 interface GeneratedPostProps {
   topic: string;
   generatedPost: string;
-  onSave: () => Promise<void>;
+  onSave?: () => Promise<void>;
   metaDescriptions: string[];
   selectedMetaDescription: string;
   setSelectedMetaDescription: (description: string) => void;
@@ -35,7 +35,14 @@ const GeneratedPost = ({
   const [isFactChecking, setIsFactChecking] = useState(false);
   const [factCheckIssues, setFactCheckIssues] = useState([]);
   const [showFactCheck, setShowFactCheck] = useState(false);
+  const [currentContent, setCurrentContent] = useState(generatedPost);
+  const [postId, setPostId] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // Update currentContent when generatedPost changes
+  useEffect(() => {
+    setCurrentContent(generatedPost);
+  }, [generatedPost]);
 
   const handleSave = async () => {
     if (!selectedMetaDescription) {
@@ -49,7 +56,31 @@ const GeneratedPost = ({
 
     setIsSaving(true);
     try {
-      await onSave();
+      // Call the onSave prop if provided (for backward compatibility)
+      if (onSave) {
+        await onSave();
+      } else {
+        // Save the post to the database
+        const { data, error } = await supabase
+          .from('blog_posts')
+          .insert([
+            {
+              title: topic,
+              content: currentContent,
+              meta_description: selectedMetaDescription
+            }
+          ])
+          .select('id')
+          .single();
+
+        if (error) throw error;
+
+        // Store the post ID for future operations
+        if (data && data.id) {
+          setPostId(data.id);
+        }
+      }
+
       setIsSaved(true);
       toast({
         title: "Success",
@@ -72,8 +103,15 @@ const GeneratedPost = ({
     setShowFactCheck(true);
     
     try {
+      // Log the content being sent for fact-checking
+      console.log(`Sending content for fact-checking (${currentContent.length} characters)`);
+      console.log('Content preview:', currentContent.substring(0, 100) + '...');
+      
       const { data, error } = await supabase.functions.invoke('fact-check-post', {
-        body: { content: generatedPost }
+        body: JSON.stringify({ 
+          content: currentContent,
+          postId
+        })
       });
 
       if (error) throw error;
@@ -95,6 +133,38 @@ const GeneratedPost = ({
       });
     } finally {
       setIsFactChecking(false);
+    }
+  };
+
+  const handleContentUpdated = (newContent: string) => {
+    setCurrentContent(newContent);
+    
+    // Update the post in the database if it's already saved
+    if (postId) {
+      updatePostInDatabase(newContent);
+    }
+  };
+
+  const updatePostInDatabase = async (content: string) => {
+    try {
+      const { error } = await supabase
+        .from('blog_posts')
+        .update({ 
+          content,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', postId);
+
+      if (error) {
+        console.error('Error updating post in database:', error);
+        toast({
+          title: "Warning",
+          description: "Content was revised but database update failed.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error updating post:', error);
     }
   };
 
@@ -163,7 +233,7 @@ const GeneratedPost = ({
         <CardContent>
           <div className="prose prose-invert max-w-none">
             <div className="whitespace-pre-wrap bg-[#1a1f3d] p-4 rounded-md text-gray-200 font-mono text-sm overflow-auto max-h-[600px]">
-              {generatedPost}
+              {currentContent}
             </div>
           </div>
         </CardContent>
@@ -174,6 +244,9 @@ const GeneratedPost = ({
           <FactCheckResults 
             issues={factCheckIssues}
             isLoading={isFactChecking}
+            postId={postId}
+            content={currentContent}
+            onContentUpdated={handleContentUpdated}
           />
         ) : (
           <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">

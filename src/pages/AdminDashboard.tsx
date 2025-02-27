@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -148,46 +147,6 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleSavePost = async () => {
-    if (!selectedMetaDescription) {
-      toast({
-        title: "Error",
-        description: "Please select a meta description before saving.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const { error: saveError } = await supabase
-        .from('blog_posts')
-        .insert([
-          {
-            title: topic,
-            content: generatedPost,
-            meta_description: selectedMetaDescription
-          }
-        ])
-        .single();
-
-      if (saveError) {
-        throw saveError;
-      }
-
-      toast({
-        title: "Success",
-        description: "Blog post saved successfully!",
-      });
-    } catch (error) {
-      console.error('Error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save blog post. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
   const resetForm = () => {
     setShowPostForm(true);
     setGeneratedPost("");
@@ -235,7 +194,6 @@ const AdminDashboard = () => {
                   <GeneratedPost
                     topic={topic}
                     generatedPost={generatedPost}
-                    onSave={handleSavePost}
                     metaDescriptions={metaDescriptions}
                     selectedMetaDescription={selectedMetaDescription}
                     setSelectedMetaDescription={setSelectedMetaDescription}
