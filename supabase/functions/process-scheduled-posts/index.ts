@@ -5,12 +5,22 @@ import { Database } from "../_shared/database-types.ts";
 
 console.log("Process Scheduled Posts function started...");
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
 const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey);
 
 serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   console.log("Processing scheduled posts...");
   
   try {
@@ -70,8 +80,9 @@ serve(async (req) => {
               topic = topicData.topic;
             } else {
               // Use provided topics if available, otherwise generate
-              if (post.topics && post.topics[i]) {
-                topic = post.topics[i];
+              const topics = post.topics as string[] || [];
+              if (topics && topics[i]) {
+                topic = topics[i];
               } else {
                 // If we've used up all provided topics, generate a new one
                 const generateTopicResponse = await fetch(
@@ -180,7 +191,7 @@ serve(async (req) => {
         processed: scheduledPosts?.length || 0
       }),
       { 
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200 
       }
     );
@@ -190,7 +201,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
       { 
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500 
       }
     );
