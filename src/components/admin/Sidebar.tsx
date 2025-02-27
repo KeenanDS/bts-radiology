@@ -1,9 +1,11 @@
 
 import { Button } from "@/components/ui/button";
-import { FileText, User, Settings, LogOut } from "lucide-react";
-import { Link } from "react-router-dom";
+import { FileText, User, Settings, LogOut, BookText } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 
 const Sidebar = () => {
+  const location = useLocation();
+  
   return (
     <div className="w-64 bg-white/5 backdrop-blur-sm border-r border-white/10 flex flex-col h-screen">
       <div className="p-4 border-b border-white/10">
@@ -16,13 +18,25 @@ const Sidebar = () => {
       </div>
       
       <div className="flex-1 py-6 px-4 space-y-1">
-        <Button 
-          variant="ghost" 
-          className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/10"
-        >
-          <FileText className="mr-2 h-5 w-5" />
-          Generate Post
-        </Button>
+        <Link to="/admin">
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${location.pathname === '/admin' ? 'bg-white/10 text-white' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
+          >
+            <FileText className="mr-2 h-5 w-5" />
+            Generate Post
+          </Button>
+        </Link>
+        
+        <Link to="/admin/posts">
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${location.pathname === '/admin/posts' ? 'bg-white/10 text-white' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
+          >
+            <BookText className="mr-2 h-5 w-5" />
+            Blog Posts
+          </Button>
+        </Link>
         
         <Button 
           variant="ghost" 
