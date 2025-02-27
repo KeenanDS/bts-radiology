@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +22,23 @@ interface GeneratedPostProps {
   isGeneratingMeta: boolean;
 }
 
+// Define the structure of raw issues returned from the API
+interface RawFactCheckIssue {
+  quote: string;
+  explanation: string;
+  correction: string;
+  source?: string;
+}
+
+// Define the structure used by the FactCheckResults component
+interface FactCheckIssue {
+  claim: string;
+  issue: string;
+  suggestion: string;
+  source?: string;
+  resolved?: boolean;
+}
+
 const GeneratedPost = ({ 
   topic, 
   generatedPost,
@@ -33,7 +51,7 @@ const GeneratedPost = ({
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isFactChecking, setIsFactChecking] = useState(false);
-  const [factCheckIssues, setFactCheckIssues] = useState([]);
+  const [factCheckIssues, setFactCheckIssues] = useState<FactCheckIssue[]>([]);
   const [showFactCheck, setShowFactCheck] = useState(false);
   const [currentContent, setCurrentContent] = useState(generatedPost);
   const [postId, setPostId] = useState<string | null>(null);
@@ -98,6 +116,24 @@ const GeneratedPost = ({
     }
   };
 
+  // Transform raw API issues to the format expected by FactCheckResults
+  const mapApiIssues = (rawIssues: RawFactCheckIssue[]): FactCheckIssue[] => {
+    console.log('Mapping API issues:', rawIssues);
+    
+    if (!Array.isArray(rawIssues)) {
+      console.error('Expected issues to be an array, got:', typeof rawIssues);
+      return [];
+    }
+
+    return rawIssues.map(issue => ({
+      claim: issue.quote,
+      issue: issue.explanation,
+      suggestion: issue.correction,
+      source: issue.source,
+      resolved: false
+    }));
+  };
+
   const handleFactCheck = async () => {
     setIsFactChecking(true);
     setShowFactCheck(true);
@@ -115,13 +151,21 @@ const GeneratedPost = ({
       });
 
       if (error) throw error;
+      
+      console.log('Raw fact check response:', data);
+      
+      if (!data.success) {
+        throw new Error(data.error || "Unknown error during fact check");
+      }
 
-      setFactCheckIssues(data.issues);
+      // Transform API response to the format expected by the FactCheckResults component
+      const transformedIssues = mapApiIssues(data.issues);
+      setFactCheckIssues(transformedIssues);
       
       toast({
         title: "Fact Check Complete",
-        description: data.issues.length > 0 
-          ? `Found ${data.issues.length} potential issues` 
+        description: transformedIssues.length > 0 
+          ? `Found ${transformedIssues.length} potential issues` 
           : "No issues found!",
       });
     } catch (error) {
