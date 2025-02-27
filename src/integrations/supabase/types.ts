@@ -15,6 +15,7 @@ export type Database = {
           created_at: string
           id: string
           meta_description: string | null
+          scheduled_post_id: string | null
           title: string
           updated_at: string
         }
@@ -23,6 +24,7 @@ export type Database = {
           created_at?: string
           id?: string
           meta_description?: string | null
+          scheduled_post_id?: string | null
           title: string
           updated_at?: string
         }
@@ -31,10 +33,19 @@ export type Database = {
           created_at?: string
           id?: string
           meta_description?: string | null
+          scheduled_post_id?: string | null
           title?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_scheduled_post"
+            columns: ["scheduled_post_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_posts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       fact_check_results: {
         Row: {
@@ -70,6 +81,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      scheduled_posts: {
+        Row: {
+          auto_fact_check: boolean
+          auto_generate_topics: boolean
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          num_posts: number
+          scheduled_for: string
+          status: string
+          topics: Json | null
+        }
+        Insert: {
+          auto_fact_check?: boolean
+          auto_generate_topics?: boolean
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          num_posts?: number
+          scheduled_for: string
+          status?: string
+          topics?: Json | null
+        }
+        Update: {
+          auto_fact_check?: boolean
+          auto_generate_topics?: boolean
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          num_posts?: number
+          scheduled_for?: string
+          status?: string
+          topics?: Json | null
+        }
+        Relationships: []
       }
     }
     Views: {
