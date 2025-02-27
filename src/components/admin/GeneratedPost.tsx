@@ -61,13 +61,27 @@ const GeneratedPost = ({
   const [factCheckIssues, setFactCheckIssues] = useState<FactCheckIssue[]>([]);
   const [currentContent, setCurrentContent] = useState(generatedPost);
   const [postId, setPostId] = useState<string | null>(null);
-  const [showSidebar, setShowSidebar] = useState(false);
+  // Changed: Always show sidebar when a post is generated
+  const [showSidebar, setShowSidebar] = useState(true);
   const { toast } = useToast();
 
   // Update currentContent when generatedPost changes
   useEffect(() => {
     setCurrentContent(generatedPost);
+    // Ensure sidebar is shown whenever we have content
+    if (generatedPost) {
+      console.log("Post generated, showing sidebar");
+      setShowSidebar(true);
+    }
   }, [generatedPost]);
+
+  // Log when meta descriptions are available
+  useEffect(() => {
+    console.log(`Meta descriptions available: ${metaDescriptions.length}`);
+    if (metaDescriptions.length > 0) {
+      console.log("First meta description:", metaDescriptions[0]);
+    }
+  }, [metaDescriptions]);
 
   const handleSave = async () => {
     if (!selectedMetaDescription) {
@@ -81,6 +95,8 @@ const GeneratedPost = ({
 
     setIsSaving(true);
     try {
+      console.log("Saving post with meta description:", selectedMetaDescription);
+      
       // Call the onSave prop if provided (for backward compatibility)
       if (onSave) {
         await onSave();
@@ -98,16 +114,21 @@ const GeneratedPost = ({
           .select('id')
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error("Database error when saving:", error);
+          throw error;
+        }
+
+        console.log("Post saved successfully with data:", data);
 
         // Store the post ID for future operations
         if (data && data.id) {
+          console.log("Setting post ID:", data.id);
           setPostId(data.id);
         }
       }
 
       setIsSaved(true);
-      setShowSidebar(true); // Show the sidebar after saving
       toast({
         title: "Success",
         description: "Post saved successfully!",
@@ -435,61 +456,73 @@ const GeneratedPost = ({
                       <p className="text-gray-500">No meta descriptions generated yet.</p>
                     )}
                   </CardContent>
+                  {/* Add visual indication for unsaved posts */}
+                  {!isSaved && selectedMetaDescription && (
+                    <CardFooter className="pt-0">
+                      <div className="w-full bg-yellow-900/30 text-yellow-400 text-xs p-2 rounded border border-yellow-900/50">
+                        <div className="flex items-center">
+                          <span className="mr-1">⚠️</span> Don't forget to save your post to enable fact checking
+                        </div>
+                      </div>
+                    </CardFooter>
+                  )}
                 </Card>
 
-                {/* Fact Check Section */}
-                {isSaved && (
-                  <Card className="bg-[#1a1f3d] border-[#2a2f4d]">
-                    <CardHeader className="pb-2">
-                      <div className="flex justify-between items-center">
-                        <CardTitle className="text-white text-lg">Fact Check Results</CardTitle>
-                        {factCheckIssues.length > 0 && (
-                          <Badge 
-                            variant={activeIssueCount > 0 ? "default" : "success"}
-                            className={activeIssueCount > 0 ? "bg-yellow-600" : ""}
-                          >
-                            {factCheckIssues.length} issues
-                          </Badge>
-                        )}
-                      </div>
-                      <CardDescription className="text-gray-400">
-                        {factCheckIssues.length === 0 
-                          ? "Run a fact check to verify your content" 
-                          : "Review and fix potential factual issues"}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <AnimatePresence mode="wait">
-                        {isFactChecking ? (
-                          <div className="flex flex-col items-center justify-center py-8 space-y-3">
-                            <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                            <p className="text-gray-400">Checking facts and accuracy...</p>
-                          </div>
-                        ) : factCheckIssues.length > 0 ? (
-                          <FactCheckResults 
-                            issues={factCheckIssues}
-                            isLoading={isFactChecking}
-                            postId={postId || undefined}
-                            content={currentContent}
-                            onContentUpdated={handleContentUpdated}
-                            onIgnoreIssue={handleIgnoreIssue}
-                          />
-                        ) : (
-                          <div className="flex flex-col items-center justify-center py-6 space-y-3 text-center">
-                            {isSaved ? (
-                              <>
-                                <CheckCircle className="h-12 w-12 text-green-500" />
-                                <p className="text-gray-300">No issues detected. Content ready to publish!</p>
-                              </>
-                            ) : (
-                              <p className="text-gray-500">Save your post first to run a fact check.</p>
-                            )}
-                          </div>
-                        )}
-                      </AnimatePresence>
-                    </CardContent>
-                  </Card>
-                )}
+                {/* Fact Check Section - Only show if saved or make it clear saving is required */}
+                <Card className="bg-[#1a1f3d] border-[#2a2f4d]">
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between items-center">
+                      <CardTitle className="text-white text-lg">Fact Check Results</CardTitle>
+                      {factCheckIssues.length > 0 && (
+                        <Badge 
+                          variant={activeIssueCount > 0 ? "default" : "success"}
+                          className={activeIssueCount > 0 ? "bg-yellow-600" : ""}
+                        >
+                          {factCheckIssues.length} issues
+                        </Badge>
+                      )}
+                    </div>
+                    <CardDescription className="text-gray-400">
+                      {!isSaved 
+                        ? "Save your post first to run a fact check" 
+                        : factCheckIssues.length === 0 
+                        ? "Run a fact check to verify your content" 
+                        : "Review and fix potential factual issues"}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <AnimatePresence mode="wait">
+                      {isFactChecking ? (
+                        <div className="flex flex-col items-center justify-center py-8 space-y-3">
+                          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                          <p className="text-gray-400">Checking facts and accuracy...</p>
+                        </div>
+                      ) : factCheckIssues.length > 0 ? (
+                        <FactCheckResults 
+                          issues={factCheckIssues}
+                          isLoading={isFactChecking}
+                          postId={postId || undefined}
+                          content={currentContent}
+                          onContentUpdated={handleContentUpdated}
+                          onIgnoreIssue={handleIgnoreIssue}
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-6 space-y-3 text-center">
+                          {isSaved ? (
+                            <>
+                              <CheckCircle className="h-12 w-12 text-green-500" />
+                              <p className="text-gray-300">No issues detected. Content ready to publish!</p>
+                            </>
+                          ) : (
+                            <div className="text-gray-500 py-4">
+                              <p>Save your post first to enable fact checking.</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </AnimatePresence>
+                  </CardContent>
+                </Card>
               </div>
             )}
           </div>

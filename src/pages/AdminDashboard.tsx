@@ -28,6 +28,13 @@ const AdminDashboard = () => {
   const topicInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  // Log when post generation completes
+  useEffect(() => {
+    if (generatedPost) {
+      console.log("Post generation complete. Content length:", generatedPost.length);
+    }
+  }, [generatedPost]);
+
   const generateTopic = async () => {
     setIsGenerating(true);
     try {
@@ -64,6 +71,9 @@ const AdminDashboard = () => {
   };
 
   const generateMetaDescriptions = async () => {
+    console.log("Generating meta descriptions for:", topic);
+    console.log("Post content length:", generatedPost.length);
+
     setIsGeneratingMeta(true);
     try {
       const { data: metaData, error: metaError } = await supabase.functions
@@ -75,9 +85,11 @@ const AdminDashboard = () => {
         });
 
       if (metaError) {
+        console.error("Meta generation error:", metaError);
         throw metaError;
       }
 
+      console.log("Meta descriptions received:", metaData.descriptions);
       setMetaDescriptions(metaData.descriptions);
       // Removed automatic selection of first description
       
@@ -123,6 +135,7 @@ const AdminDashboard = () => {
       }
 
       if (generationData?.content) {
+        console.log("Blog post generated with length:", generationData.content.length);
         setGeneratedPost(generationData.content);
         setShowPostForm(false);
         
