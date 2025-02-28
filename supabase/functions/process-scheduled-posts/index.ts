@@ -177,23 +177,6 @@ async function updatePostStatus(postId, status, errorMessage = null) {
   }
 }
 
-// Helper function to extract title from markdown content
-function extractTitleFromContent(content) {
-  // Check if content is null or undefined
-  if (!content) {
-    return "Untitled Post";
-  }
-  
-  // Look for a markdown title (# Title) at the beginning of the content
-  const titleMatch = content.match(/^#\s+(.+?)(\n|$)/);
-  if (titleMatch && titleMatch[1]) {
-    return titleMatch[1].trim();
-  }
-  
-  // If no markdown title found, return a placeholder title
-  return "Untitled Post";
-}
-
 // Main function to process a scheduled post
 async function processScheduledPost(post, supabase) {
   console.log(`Starting to process post: ${post.id}`);
@@ -346,20 +329,11 @@ async function processScheduledPost(post, supabase) {
         throw new Error("No meta descriptions returned");
       }
       
-      // Extract title from content or use topic as fallback
-      let postTitle = extractTitleFromContent(blogPostData.content);
-      if (!postTitle || postTitle === "Untitled Post") {
-        // Use the topic as a fallback if no title was extracted
-        postTitle = topic || "Untitled Post";
-      }
-      
-      console.log(`Using title: "${postTitle}" for blog post`);
-      
       // Save the blog post
       const { data: blogPost, error: blogPostError } = await supabase
         .from("blog_posts")
         .insert({
-          title: postTitle, // Use the extracted title or topic
+          title: topic,
           content: blogPostData.content,
           meta_description: metaData.descriptions[0], // Use the first meta description
           scheduled_post_id: post.id
