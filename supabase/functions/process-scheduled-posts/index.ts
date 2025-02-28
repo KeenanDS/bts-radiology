@@ -2,13 +2,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Database } from "../_shared/database-types.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 console.log("Process Scheduled Posts function started...");
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -20,6 +16,8 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey);
 
 serve(async (req) => {
+  console.log(`Request received: ${req.method}`);
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -28,8 +26,17 @@ serve(async (req) => {
   console.log("Processing scheduled posts...");
   
   try {
+    let requestBody = {};
+    try {
+      requestBody = await req.json();
+      console.log("Request body:", JSON.stringify(requestBody));
+    } catch (e) {
+      console.log("No request body or invalid JSON");
+    }
+    
     // Get current time
     const now = new Date();
+    console.log(`Current time: ${now.toISOString()}`);
     
     // Find all pending posts that are scheduled for now or earlier
     const { data: scheduledPosts, error: fetchError } = await supabase

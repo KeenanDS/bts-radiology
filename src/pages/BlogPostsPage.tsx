@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
-import { ArrowUpDown, Download, FileDown, Check, Clock, AlertTriangle, Calendar } from "lucide-react";
+import { ArrowUpDown, Download, FileDown, Check, Clock, AlertTriangle, Calendar, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,6 +62,7 @@ const BlogPostsPage = () => {
   const [loadingScheduled, setLoadingScheduled] = useState(true);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [pdfGenerating, setPdfGenerating] = useState<string | null>(null);
+  const [processingPosts, setProcessingPosts] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -259,6 +260,51 @@ const BlogPostsPage = () => {
     }
   };
 
+  const processScheduledPosts = async () => {
+    try {
+      setProcessingPosts(true);
+      toast({
+        title: "Processing",
+        description: "Checking for scheduled posts to process...",
+      });
+
+      const { data, error } = await supabase.functions.invoke("process-scheduled-posts", {
+        body: JSON.stringify({ trigger_source: "manual" }),
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      console.log("Process result:", data);
+      
+      // Refresh the lists after processing
+      await fetchPosts();
+      await fetchScheduledPosts();
+      
+      if (data.processed > 0) {
+        toast({
+          title: "Success",
+          description: `Processed ${data.processed} scheduled post(s)!`,
+        });
+      } else {
+        toast({
+          title: "Information",
+          description: "No pending scheduled posts were found to process.",
+        });
+      }
+    } catch (error) {
+      console.error("Error processing scheduled posts:", error);
+      toast({
+        title: "Error",
+        description: "Failed to process scheduled posts. See console for details.",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessingPosts(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "pending":
@@ -418,6 +464,29 @@ const BlogPostsPage = () => {
             
             <TabsContent value="scheduled" className="mt-0">
               <div className="space-y-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-white text-lg font-medium">Scheduled Posts</h2>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={processScheduledPosts}
+                    disabled={processingPosts}
+                    className="bg-[#1a1f3d] border-[#2a2f4d] text-white hover:bg-[#2a2f5d]"
+                  >
+                    {processingPosts ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Process Pending Posts
+                      </>
+                    )}
+                  </Button>
+                </div>
+              
                 {loadingScheduled ? (
                   <p className="text-center text-gray-400">Loading scheduled posts...</p>
                 ) : scheduledPosts.length === 0 ? (
