@@ -1,413 +1,336 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders } from "../_shared/cors.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { Database } from "../_shared/database-types.ts";
 
-// Constants for status
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+
+// Environment variables
+const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// Status constants
 const STATUS = {
   PENDING: "pending",
-  GENERATING_TOPICS: "generating_topics",
-  TOPICS_GENERATED: "topics_generated",
-  GENERATING_CONTENT: "generating_content",
-  CONTENT_GENERATED: "content_generated",
-  FACT_CHECKING: "fact_checking",
-  FACT_CHECK_COMPLETE: "fact_check_complete",
-  FACT_CHECK_FAILED: "fact_check_failed",
-  COMPLETED: "completed",
-  FAILED: "failed",
-};
-
-// Constants for individual blog post status
-const POST_STATUS = {
+  PROCESSING: "processing",
   GENERATING: "generating",
-  GENERATED: "generated",
   FACT_CHECKING: "fact_checking",
-  FACT_CHECK_COMPLETE: "fact_check_complete",
-  FACT_CHECK_FAILED: "fact_check_failed",
+  FACT_CHECK_ISSUES_FOUND: "fact_check_issues_found",
+  FACT_CHECK_FIXED: "fact_check_fixed",
   COMPLETED: "completed",
   FAILED: "failed",
 };
 
-// Environment variables from Supabase
-const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+// CORS headers for browser requests
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
-// Create Supabase client
-const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey);
-
+// Main request handler
 serve(async (req) => {
-  // Handle CORS for browser requests
+  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders });
   }
 
+  console.log("Processing scheduled posts...");
+  
   try {
-    // Parse request body
-    const { trigger_source } = await req.json();
-    const now = new Date();
-    
-    console.log(`Processing scheduled posts, triggered by: ${trigger_source}`);
-
-    // Get all pending posts that are scheduled for now or earlier
-    const { data: scheduledPosts, error: fetchError } = await supabase
+    // Get pending posts scheduled for now or earlier
+    const now = new Date().toISOString();
+    const { data: pendingPosts, error: queryError } = await supabase
       .from("scheduled_posts")
       .select("*")
       .eq("status", STATUS.PENDING)
-      .lte("scheduled_for", now.toISOString())
+      .lte("scheduled_for", now)
       .order("scheduled_for", { ascending: true });
 
-    if (fetchError) {
-      throw new Error(`Error fetching scheduled posts: ${fetchError.message}`);
+    if (queryError) {
+      throw new Error(`Failed to query pending posts: ${queryError.message}`);
     }
 
-    if (!scheduledPosts || scheduledPosts.length === 0) {
-      console.log("No pending scheduled posts found.");
-      return new Response(
-        JSON.stringify({ processed: 0, message: "No pending posts to process" }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        }
-      );
+    if (!pendingPosts || pendingPosts.length === 0) {
+      console.log("No pending posts to process");
+      return new Response(JSON.stringify({ success: true, message: "No pending posts to process" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    console.log(`Found ${scheduledPosts.length} scheduled posts to process.`);
-    
-    let totalProcessed = 0;
-    
-    // Process each scheduled post
-    for (const post of scheduledPosts) {
+    console.log(`Found ${pendingPosts.length} pending posts to process`);
+
+    // Process each post
+    for (const post of pendingPosts) {
+      console.log(`Processing post ${post.id} scheduled for ${post.scheduled_for}`);
+
+      // Update status to PROCESSING
+      await updatePostStatus(post.id, STATUS.PROCESSING, null);
+
       try {
-        console.log(`Processing scheduled post ID: ${post.id}`);
+        // Generate the posts based on topics
+        const generatedTopics = post.auto_generate_topics 
+          ? await generateTopics(post.num_posts)
+          : (post.topics as string[]) || [];
         
-        // Step 1: Update status to GENERATING_TOPICS
-        await updatePostStatus(post.id, STATUS.GENERATING_TOPICS, null);
-        
-        // Generate or use provided topics
-        const topics = await getTopics(post);
-        
-        // Step.2: Update topics and status to TOPICS_GENERATED
-        await updateScheduledPost(post.id, {
-          topics,
-          status: STATUS.TOPICS_GENERATED
-        });
-        
-        // Keep track of created blog posts and their statuses
-        const blogPostIds = [];
-        let hasFailures = false;
-        
-        // Step 3: Generate blog posts
-        for (let i = 0; i < post.num_posts; i++) {
+        // Ensure we have enough topics
+        if (generatedTopics.length < post.num_posts) {
+          const additionalTopics = await generateTopics(post.num_posts - generatedTopics.length);
+          generatedTopics.push(...additionalTopics);
+        }
+
+        console.log(`Generated topics: ${generatedTopics.join(", ")}`);
+
+        // Generate blog posts for each topic
+        const blogPosts = [];
+        for (const topic of generatedTopics.slice(0, post.num_posts)) {
           try {
-            // Update status to GENERATING_CONTENT
-            await updatePostStatus(post.id, STATUS.GENERATING_CONTENT, null);
-            
-            // Select a topic from the list
-            const topic = topics[i % topics.length];
-            console.log(`Generating blog post ${i + 1}/${post.num_posts} on topic: ${topic}`);
-            
-            // Generate blog post
-            const generatedPost = await generateBlogPost(topic);
-            
-            if (!generatedPost || !generatedPost.content) {
-              throw new Error(`Failed to generate blog post for topic: ${topic}`);
-            }
-            
-            // Extract title from content
-            const title = extractTitleFromContent(generatedPost.content, topic);
-            
-            // Insert blog post into database with the status
-            const { data: blogPost, error: insertError } = await supabase
-              .from("blog_posts")
-              .insert({
-                title: title,
-                content: generatedPost.content,
-                meta_description: generatedPost.meta_description || null,
-                scheduled_post_id: post.id,
-                status: POST_STATUS.GENERATED,
-              })
-              .select()
-              .single();
-            
-            if (insertError || !blogPost) {
-              throw new Error(`Error inserting blog post: ${insertError?.message || "Unknown error"}`);
-            }
-            
-            blogPostIds.push(blogPost.id);
-            
-            // Update status to CONTENT_GENERATED
-            await updatePostStatus(post.id, STATUS.CONTENT_GENERATED, null);
-            
-            // Step 4: Fact check if enabled
-            if (post.auto_fact_check) {
-              try {
-                // Update post to fact checking status
-                await supabase
-                  .from("blog_posts")
-                  .update({ status: POST_STATUS.FACT_CHECKING })
-                  .eq("id", blogPost.id);
-                
-                // Update scheduled post status
-                await updatePostStatus(post.id, STATUS.FACT_CHECKING, null);
-                
-                // Perform fact check
-                const factCheckResult = await factCheckPost(blogPost.id, blogPost.title, blogPost.content);
-                
-                if (factCheckResult.success) {
-                  // Update blog post status
-                  await supabase
-                    .from("blog_posts")
-                    .update({ status: POST_STATUS.FACT_CHECK_COMPLETE })
-                    .eq("id", blogPost.id);
-                } else {
-                  // Mark as fact check failed but continue
-                  await supabase
-                    .from("blog_posts")
-                    .update({ status: POST_STATUS.FACT_CHECK_FAILED })
-                    .eq("id", blogPost.id);
-                    
-                  console.log(`Fact check failed for blog post ID: ${blogPost.id}`);
-                  // We continue processing, not treating this as a total failure
-                }
-              } catch (factCheckError) {
-                console.error(`Fact check error for post ${blogPost.id}: ${factCheckError.message}`);
-                
-                // Mark the post as failed fact check but continue
-                await supabase
-                  .from("blog_posts")
-                  .update({ status: POST_STATUS.FACT_CHECK_FAILED })
-                  .eq("id", blogPost.id);
-                  
-                // Create an empty fact check result to indicate the check was attempted
-                await supabase
-                  .from("fact_check_results")
-                  .insert({
-                    post_id: blogPost.id,
-                    issues: [],
-                    checked_at: new Date().toISOString(),
-                  });
-              }
-            } else {
-              // No fact check needed, mark as completed
-              await supabase
-                .from("blog_posts")
-                .update({ status: POST_STATUS.COMPLETED })
-                .eq("id", blogPost.id);
-            }
-            
-          } catch (postError) {
-            console.error(`Error generating post ${i + 1}: ${postError.message}`);
-            hasFailures = true;
+            const blogPost = await generateBlogPost(topic, post.id);
+            blogPosts.push(blogPost);
+          } catch (error) {
+            console.error(`Error generating post for topic "${topic}": ${error.message}`);
           }
         }
-        
-        // Step 5: Mark scheduled post as completed
-        const finalStatus = hasFailures ? STATUS.FAILED : STATUS.COMPLETED;
-        await updatePostStatus(post.id, finalStatus, null);
-        
-        totalProcessed++;
-        
-      } catch (processError) {
-        console.error(`Error processing scheduled post ${post.id}: ${processError.message}`);
-        
-        // Mark the scheduled post as failed
-        await updatePostStatus(
-          post.id, 
-          STATUS.FAILED, 
-          `Processing error: ${processError.message}`
-        );
+
+        if (blogPosts.length === 0) {
+          throw new Error("Failed to generate any blog posts");
+        }
+
+        // If auto fact check is enabled, process each post
+        if (post.auto_fact_check) {
+          console.log(`Auto fact check enabled for post ${post.id}`);
+          
+          // Process fact checking for each blog post
+          for (const blogPost of blogPosts) {
+            try {
+              await processFactCheck(blogPost, post.id);
+            } catch (factCheckError) {
+              console.error(`Fact check error for post ${blogPost.id}: ${factCheckError.message}`);
+              // Continue with other posts even if one fact check fails
+            }
+          }
+        }
+
+        // Mark scheduled post as completed
+        await updatePostStatus(post.id, STATUS.COMPLETED, null);
+        console.log(`Completed processing post ${post.id}`);
+      } catch (error) {
+        console.error(`Error processing post ${post.id}: ${error.message}`);
+        await updatePostStatus(post.id, STATUS.FAILED, error.message);
       }
     }
-    
-    // Return response with processed count
+
     return new Response(
       JSON.stringify({ 
-        processed: totalProcessed,
-        message: `Processed ${totalProcessed} scheduled posts` 
+        success: true, 
+        message: `Processed ${pendingPosts.length} posts` 
       }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-    
   } catch (error) {
-    console.error(`Global error: ${error.message}`);
-    
+    console.error(`Error in process-scheduled-posts: ${error.message}`);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      JSON.stringify({ success: false, error: error.message }),
+      { 
         status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
       }
     );
   }
 });
 
-// Helper function to update scheduled post status
-async function updatePostStatus(id: string, status: string, errorMessage: string | null) {
-  const updates: any = { status };
-  
-  if (errorMessage !== null) {
-    updates.error_message = errorMessage;
-  }
-  
+// Helper function to update post status
+async function updatePostStatus(postId: string, status: string, errorMessage: string | null) {
   const { error } = await supabase
     .from("scheduled_posts")
-    .update(updates)
-    .eq("id", id);
-    
+    .update({ 
+      status, 
+      error_message: errorMessage,
+      ...(status === STATUS.COMPLETED ? { completed_at: new Date().toISOString() } : {})
+    })
+    .eq("id", postId);
+
   if (error) {
-    console.error(`Error updating post status: ${error.message}`);
-    throw error;
+    console.error(`Failed to update post status: ${error.message}`);
   }
 }
 
-// Helper function to update multiple fields in a scheduled post
-async function updateScheduledPost(id: string, updates: any) {
-  const { error } = await supabase
-    .from("scheduled_posts")
-    .update(updates)
-    .eq("id", id);
-    
-  if (error) {
-    console.error(`Error updating scheduled post: ${error.message}`);
-    throw error;
-  }
-}
-
-// Function to generate or fetch topics
-async function getTopics(post: any) {
+// Generate topics using the generate-topic function
+async function generateTopics(count: number): Promise<string[]> {
   try {
-    // If auto-generate is disabled, use provided topics
-    if (!post.auto_generate_topics && post.topics && post.topics.length > 0) {
-      console.log(`Using provided topics: ${post.topics.join(", ")}`);
-      return post.topics;
+    const response = await fetch(`${supabaseUrl}/functions/v1/generate-topic`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseServiceKey}`
+      },
+      body: JSON.stringify({ count })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to generate topics: ${response.statusText}`);
     }
-    
-    // Otherwise, generate topics
-    console.log("Auto-generating topics...");
-    const numTopics = Math.max(post.num_posts, 3); // Get at least 3 topics
-    const topics = [];
-    
-    for (let i = 0; i < numTopics; i++) {
-      const response = await fetch(`${supabaseUrl}/functions/v1/generate-topic`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify({}),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to generate topic: ${response.statusText}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result && result.topic) {
-        topics.push(result.topic);
-      } else {
-        throw new Error("Invalid topic generation response");
-      }
-    }
-    
-    if (topics.length === 0) {
-      throw new Error("No topics could be generated");
-    }
-    
-    console.log(`Generated topics: ${topics.join(", ")}`);
-    return topics;
-    
+
+    const { topics } = await response.json();
+    return topics || [];
   } catch (error) {
     console.error(`Error generating topics: ${error.message}`);
-    throw error;
+    return [];
   }
 }
 
-// Function to generate a blog post for a given topic
-async function generateBlogPost(topic: string) {
+// Generate a blog post using the generate-blog-post function
+async function generateBlogPost(topic: string, scheduledPostId: string) {
+  console.log(`Generating blog post for topic: ${topic}`);
+  
   try {
+    // Call the generate-blog-post function
     const response = await fetch(`${supabaseUrl}/functions/v1/generate-blog-post`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${supabaseServiceKey}`,
+        "Authorization": `Bearer ${supabaseServiceKey}`
       },
-      body: JSON.stringify({ topic }),
+      body: JSON.stringify({ topic })
     });
-    
+
     if (!response.ok) {
       throw new Error(`Failed to generate blog post: ${response.statusText}`);
     }
-    
-    const result = await response.json();
-    
-    if (!result || !result.content) {
-      throw new Error("Invalid blog post generation response");
+
+    const data = await response.json();
+    console.log(`Blog post generation response: ${JSON.stringify(data.content).substring(0, 100)}...`);
+
+    // Insert the blog post into the database
+    const { data: blogPostData, error: insertError } = await supabase
+      .from("blog_posts")
+      .insert({
+        title: topic,
+        content: data.content,
+        scheduled_post_id: scheduledPostId,
+        status: STATUS.GENERATING,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      throw new Error(`Failed to insert blog post: ${insertError.message}`);
     }
-    
-    console.log(`Successfully generated blog post content for topic: ${topic}`);
-    return result;
-    
+
+    console.log(`Blog post inserted with ID: ${blogPostData.id}`);
+    return blogPostData;
   } catch (error) {
-    console.error(`Error generating blog post: ${error.message}`);
+    console.error(`Error in generateBlogPost: ${error.message}`);
     throw error;
   }
 }
 
-// Function to extract title from markdown content
-function extractTitleFromContent(content: string, fallbackTopic: string): string {
-  // Try to extract a title from the first # heading
-  const titleMatch = content.match(/^#\s+(.+)$/m);
-  
-  if (titleMatch && titleMatch[1]) {
-    return titleMatch[1].trim();
-  }
-  
-  // If no title found, use the topic as the title
-  return `Article about ${fallbackTopic}`;
-}
-
-// Function to fact check a blog post
-async function factCheckPost(postId: string, title: string, content: string) {
+// Process fact check for a blog post
+async function processFactCheck(blogPost: any, scheduledPostId: string) {
   try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/fact-check-post`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${supabaseServiceKey}`,
-      },
-      body: JSON.stringify({ title, content }),
-    });
+    console.log(`Starting fact check for blog post: ${blogPost.id}`);
     
-    if (!response.ok) {
-      throw new Error(`Failed to fact check post: ${response.statusText}`);
-    }
-    
-    const result = await response.json();
-    
-    // Create fact check record in database
-    const { error: insertError } = await supabase
-      .from("fact_check_results")
-      .insert({
-        post_id: postId,
-        issues: result.issues || [],
-        checked_at: new Date().toISOString(),
-      });
+    // Update blog post status to fact checking
+    const { error: updateError } = await supabase
+      .from("blog_posts")
+      .update({ status: STATUS.FACT_CHECKING })
+      .eq("id", blogPost.id);
       
-    if (insertError) {
-      throw new Error(`Error inserting fact check results: ${insertError.message}`);
+    if (updateError) {
+      throw new Error(`Failed to update blog post status to fact checking: ${updateError.message}`);
+    }
+
+    // Call the fact-check-post function
+    console.log(`Calling fact-check-post function for post ${blogPost.id}`);
+    const factCheckResponse = await fetch(
+      `${supabaseUrl}/functions/v1/fact-check-post`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseServiceKey}`
+        },
+        body: JSON.stringify({ 
+          postId: blogPost.id,
+          content: blogPost.content 
+        })
+      }
+    );
+
+    // Check for HTTP errors
+    if (!factCheckResponse.ok) {
+      throw new Error(`Fact check request failed with status: ${factCheckResponse.status} - ${factCheckResponse.statusText}`);
+    }
+
+    // Parse the response
+    const factCheckResult = await factCheckResponse.json();
+    console.log(`Fact check response received for post ${blogPost.id}`);
+
+    // Check for API-level errors
+    if (!factCheckResult.success) {
+      throw new Error(`Fact check API error: ${factCheckResult.error || 'Unknown error'}`);
+    }
+
+    // Handle the fact check issues
+    const issues = factCheckResult.issues || [];
+    const hasCriticalIssues = issues.some((issue: any) => {
+      const explanation = (issue.explanation || "").toLowerCase();
+      return explanation.includes("incorrect") || 
+             explanation.includes("false") || 
+             explanation.includes("misleading");
+    });
+
+    // Update blog post status based on fact check results
+    let newStatus = STATUS.COMPLETED;
+    if (hasCriticalIssues) {
+      console.log(`Critical issues found in post ${blogPost.id}`);
+      newStatus = STATUS.FACT_CHECK_ISSUES_FOUND;
+    } else if (issues.length > 0) {
+      console.log(`Minor issues found in post ${blogPost.id}`);
+      newStatus = STATUS.FACT_CHECK_ISSUES_FOUND;
+    } else {
+      console.log(`No issues found in post ${blogPost.id}`);
+    }
+
+    // Update the blog post status
+    const { error: finalUpdateError } = await supabase
+      .from("blog_posts")
+      .update({ status: newStatus })
+      .eq("id", blogPost.id);
+      
+    if (finalUpdateError) {
+      throw new Error(`Failed to update blog post final status: ${finalUpdateError.message}`);
+    }
+
+    console.log(`Fact check completed for blog post: ${blogPost.id}`);
+    return { success: true, issues };
+  } catch (error) {
+    console.error(`Error in processFactCheck: ${error.message}`);
+    
+    // Update blog post status to completed even if fact check failed
+    try {
+      const { error: updateError } = await supabase
+        .from("blog_posts")
+        .update({ status: STATUS.COMPLETED })
+        .eq("id", blogPost.id);
+        
+      if (updateError) {
+        console.error(`Failed to update blog post status after fact check failure: ${updateError.message}`);
+      }
+      
+      // Create an empty fact check result to indicate it was attempted
+      const { error: insertError } = await supabase
+        .from("fact_check_results")
+        .insert({
+          post_id: blogPost.id,
+          issues: [],
+          checked_at: new Date().toISOString(),
+        });
+        
+      if (insertError) {
+        console.error(`Failed to insert empty fact check result: ${insertError.message}`);
+      }
+    } catch (cleanupError) {
+      console.error(`Error during cleanup after fact check failure: ${cleanupError.message}`);
     }
     
-    return { 
-      success: true,
-      hasIssues: result.issues && result.issues.length > 0
-    };
-    
-  } catch (error) {
-    console.error(`Error fact checking post: ${error.message}`);
-    return { success: false, error: error.message };
+    throw error;
   }
 }

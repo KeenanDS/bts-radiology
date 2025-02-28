@@ -1,157 +1,324 @@
 
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.6";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
-// Configuration and environment variables
-const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-const supabaseUrl = Deno.env.get('SUPABASE_URL');
-const supabaseServiceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+// Environment variables
+const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const perplexityApiKey = Deno.env.get("PERPLEXITY_API_KEY");
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// Status constants
+const STATUS = {
+  FACT_CHECK_ISSUES_FOUND: "fact_check_issues_found",
+  FACT_CHECK_FIXED: "fact_check_fixed",
+  COMPLETED: "completed",
+};
 
 // CORS headers for browser requests
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// System prompt for content revision
+const SYSTEM_PROMPT = `You are RevisionExpert, an AI specialized in revising blog post content to fix factual issues. 
+
+You will be given:
+1. The original blog post content
+2. A specific issue that needs fixing, including:
+   - The problematic claim (exact quote)
+   - An explanation of the issue
+   - A suggested correction
+
+Your task is to:
+1. Find the exact quote in the original content
+2. Replace it with an improved version based on the suggested correction
+3. Make minimal changes beyond the specific issue to maintain the original style and flow
+4. Return the entire revised content (not just the fixed part)
+
+Important guidelines:
+- Be precise in your edits, only changing what's necessary
+- Maintain the original formatting, including headings, paragraphs, lists, etc.
+- Keep the same tone and voice as the original content
+- Ensure your changes blend seamlessly with the surrounding text
+- Return the complete revised blog post content`;
+
+// Main request handler
 serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Initialize Supabase client
-    const supabase = createClient(supabaseUrl, supabaseServiceRole);
+    console.log("Received blog post revision request");
     
-    // Parse request body
+    // Validate Perplexity API key
+    if (!perplexityApiKey) {
+      console.error("Missing PERPLEXITY_API_KEY");
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Server configuration error: Missing Perplexity API key",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Parse request
     const { postId, content, issue, claim, suggestion } = await req.json();
     
-    if (!postId || !content) {
-      throw new Error('Missing required parameters: postId and content are required');
+    // Validate required parameters
+    if (!postId && !content) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Either postId or content is required",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
-    console.log(`Processing revision request for post ${postId}`);
-    console.log(`Issue with claim: "${claim?.substring(0, 50)}..."`);
-
-    // Retrieve the full post from the database to get context
-    const { data: postData, error: postError } = await supabase
-      .from('blog_posts')
-      .select('title, content')
-      .eq('id', postId)
-      .single();
-
-    if (postError) {
-      console.error('Error fetching post:', postError);
-      throw new Error(`Failed to fetch post: ${postError.message}`);
+    if (!issue || !claim) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Issue and claim are required for revision",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
-    // Create system prompt that explains the task
-    const systemPrompt = `
-You are an expert blog post editor specializing in factual accuracy and maintaining the author's original style.
-
-Your task is to revise a blog post to correct a factual error while preserving:
-1. The original tone, voice, and writing style
-2. The overall flow and organization of the content
-3. The length and depth of the content
-
-Please make ONLY the minimum necessary changes to fix the factual issue. Do not rewrite entire sections unless absolutely required.
-`;
-
-    // Create user prompt with the specific issue to fix
-    const userPrompt = `
-I need to revise this blog post because it contains a factual error.
-
-ORIGINAL BLOG POST:
-"""
-${content}
-"""
-
-FACTUAL ERROR:
-The following claim in the blog post is problematic: "${claim}"
-
-ISSUE WITH THE CLAIM:
-${issue}
-
-SUGGESTED CORRECTION:
-${suggestion}
-
-Please provide a revised version of the ENTIRE blog post with just the factual error fixed.
-The revised version should flow naturally and maintain the original style throughout.
-`;
-
-    console.log('Sending revision request to OpenAI');
+    let contentToRevise = content;
+    let blogPostData = null;
     
-    // Call OpenAI API
-    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.3, // Lower temperature for more factual, predictable output
-        max_tokens: 4000, // Allow sufficient tokens for a full blog post revision
-      }),
-    });
+    // If postId is provided but content is not, fetch the content from the database
+    if (postId && !contentToRevise) {
+      console.log(`Fetching content for post ${postId}`);
+      const { data: postData, error: postError } = await supabase
+        .from("blog_posts")
+        .select("*")
+        .eq("id", postId)
+        .single();
 
-    if (!openaiResponse.ok) {
-      const errorData = await openaiResponse.json();
-      console.error('OpenAI API error:', errorData);
-      throw new Error(`OpenAI API error: ${errorData.error?.message || 'Unknown error'}`);
+      if (postError) {
+        console.error(`Error fetching post ${postId}: ${postError.message}`);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Failed to fetch post content: ${postError.message}`,
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      if (!postData || !postData.content) {
+        console.error(`No content found for post ${postId}`);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Post has no content to revise",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      contentToRevise = postData.content;
+      blogPostData = postData;
     }
 
-    const openaiData = await openaiResponse.json();
-    const revisedContent = openaiData.choices[0].message.content;
+    // Validate content
+    if (!contentToRevise) {
+      console.error("No content provided for revision");
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "No content provided for revision",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
-    console.log('Successfully generated revised content');
+    console.log(`Starting revision for content with issue: ${issue.substring(0, 50)}...`);
     
-    // Update the post in the database
-    if (postId) {
+    // Call Perplexity API for content revision
+    const revisedContent = await reviseContent(contentToRevise, issue, claim, suggestion);
+    
+    // If revision failed
+    if (!revisedContent) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Failed to revise content",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+    
+    // If postId is provided, update the blog post with revised content
+    if (postId && blogPostData) {
+      console.log(`Updating post ${postId} with revised content`);
+      
+      // Check if any fact check issues remain
+      let newStatus = STATUS.FACT_CHECK_FIXED;
+      
+      try {
+        const { data: factCheckData } = await supabase
+          .from("fact_check_results")
+          .select("issues")
+          .eq("post_id", postId)
+          .maybeSingle();
+          
+        if (factCheckData && Array.isArray(factCheckData.issues)) {
+          // Count unfixed issues (assuming this is for a single issue fix)
+          const remainingIssues = factCheckData.issues.length - 1;
+          console.log(`Remaining issues after fix: ${remainingIssues}`);
+          
+          if (remainingIssues <= 0) {
+            // If all issues are fixed, set status to completed
+            newStatus = STATUS.COMPLETED;
+          }
+        }
+      } catch (factCheckError) {
+        console.error(`Error checking remaining issues: ${factCheckError.message}`);
+        // Continue with update even if we can't check remaining issues
+      }
+      
+      // Update the blog post with revised content
       const { error: updateError } = await supabase
-        .from('blog_posts')
+        .from("blog_posts")
         .update({
           content: revisedContent,
-          updated_at: new Date().toISOString()
+          status: newStatus,
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', postId);
-
+        .eq("id", postId);
+        
       if (updateError) {
-        console.error('Error updating post in database:', updateError);
-        // Continue anyway to return the revised content to the client
-      } else {
-        console.log('Successfully updated post in database');
+        console.error(`Error updating blog post: ${updateError.message}`);
+        // Return success with content but log the error
+        console.log("Returning revised content despite update error");
+        return new Response(
+          JSON.stringify({
+            success: true,
+            revisedContent,
+            updateSuccess: false,
+            updateError: updateError.message,
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
       }
     }
 
-    // Return the revised content to the client
+    // Return the revised content
     return new Response(
       JSON.stringify({
         success: true,
         revisedContent,
-        message: 'Content successfully revised'
       }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
   } catch (error) {
-    console.error('Error in revise-blog-post function:', error);
-    
+    console.error(`Error in revise-blog-post: ${error.message}`);
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message || 'An unknown error occurred'
-      }),
+      JSON.stringify({ success: false, error: error.message }),
       {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
   }
 });
+
+// Revise content using Perplexity API
+async function reviseContent(content: string, issue: string, claim: string, suggestion: string) {
+  try {
+    console.log("Calling Perplexity API for content revision");
+    
+    const userPrompt = `Please revise the following blog post content to fix a factual issue:
+
+ORIGINAL CONTENT:
+${content}
+
+ISSUE TO FIX:
+${issue}
+
+PROBLEMATIC CLAIM:
+${claim}
+
+SUGGESTED CORRECTION:
+${suggestion || "No specific correction provided, please fix based on the issue description"}
+
+Please provide the entire revised blog post with the issue fixed.`;
+
+    const response = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${perplexityApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.1-sonar-small-128k-online",
+        messages: [
+          {
+            role: "system",
+            content: SYSTEM_PROMPT,
+          },
+          {
+            role: "user",
+            content: userPrompt,
+          },
+        ],
+        temperature: 0.1,
+        max_tokens: 4000,
+        top_p: 0.9,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Perplexity API error: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    
+    // Get the completion
+    const completion = result.choices[0]?.message?.content;
+    if (!completion) {
+      console.error("Empty response from Perplexity API");
+      return null;
+    }
+    
+    console.log(`Received revised content (${completion.length} chars)`);
+    return completion;
+  } catch (error) {
+    console.error(`Error in reviseContent: ${error.message}`);
+    return null;
+  }
+}
