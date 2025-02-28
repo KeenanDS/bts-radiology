@@ -16,6 +16,7 @@ export type Database = {
           id: string
           meta_description: string | null
           scheduled_post_id: string | null
+          status: string | null
           title: string
           updated_at: string
         }
@@ -25,6 +26,7 @@ export type Database = {
           id?: string
           meta_description?: string | null
           scheduled_post_id?: string | null
+          status?: string | null
           title: string
           updated_at?: string
         }
@@ -34,6 +36,7 @@ export type Database = {
           id?: string
           meta_description?: string | null
           scheduled_post_id?: string | null
+          status?: string | null
           title?: string
           updated_at?: string
         }

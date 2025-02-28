@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
-import { ArrowUpDown, Download, FileDown, Check, Clock, AlertTriangle, Calendar, RefreshCw } from "lucide-react";
+import { ArrowUpDown, Download, FileDown, Check, Clock, AlertTriangle, Calendar, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +40,7 @@ interface BlogPost {
   updated_at: string;
   fact_check_results?: FactCheckResult | null;
   scheduled_post_id?: string | null;
+  status?: string | null;
 }
 
 interface ScheduledPost {
@@ -117,7 +118,8 @@ const BlogPostsPage = () => {
           created_at: post.created_at,
           updated_at: post.updated_at,
           fact_check_results: factCheckResults,
-          scheduled_post_id: post.scheduled_post_id
+          scheduled_post_id: post.scheduled_post_id,
+          status: post.status
         };
       });
 
@@ -309,14 +311,82 @@ const BlogPostsPage = () => {
     switch (status) {
       case "pending":
         return <Badge variant="outline" className="bg-blue-900/20 text-blue-400 border-blue-800">Pending</Badge>;
-      case "processing":
-        return <Badge variant="outline" className="bg-orange-900/20 text-orange-400 border-orange-800">Processing</Badge>;
+      case "generating_topics":
+      case "generating_content":
+        return <Badge variant="outline" className="bg-orange-900/20 text-orange-400 border-orange-800">Generating</Badge>;
+      case "topics_generated":
+      case "content_generated":
+        return <Badge variant="outline" className="bg-purple-900/20 text-purple-400 border-purple-800">Generated</Badge>;
+      case "fact_checking":
+        return <Badge variant="outline" className="bg-yellow-900/20 text-yellow-400 border-yellow-800">Fact Checking</Badge>;
       case "completed":
         return <Badge variant="outline" className="bg-green-900/20 text-green-400 border-green-800">Completed</Badge>;
       case "failed":
         return <Badge variant="outline" className="bg-red-900/20 text-red-400 border-red-800">Failed</Badge>;
       default:
         return <Badge variant="outline">Unknown</Badge>;
+    }
+  };
+
+  const getPostStatusBadge = (post: BlogPost) => {
+    // First check if post has a status
+    if (post.status) {
+      switch (post.status) {
+        case "generating":
+          return <Badge variant="outline" className="bg-orange-900/20 text-orange-400 border-orange-800">Generating</Badge>;
+        case "generated":
+          return <Badge variant="outline" className="bg-purple-900/20 text-purple-400 border-purple-800">Generated</Badge>;
+        case "fact_checking":
+          return <Badge variant="outline" className="bg-yellow-900/20 text-yellow-400 border-yellow-800">
+            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            Checking Facts
+          </Badge>;
+        case "fact_check_complete":
+          return post.fact_check_results && post.fact_check_results.issues.length === 0 ? (
+            <Badge variant="success" className="flex items-center gap-1">
+              <Check className="h-3 w-3" />
+              Facts Verified
+            </Badge>
+          ) : (
+            <Badge variant="destructive" className="flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              Issues Found
+            </Badge>
+          );
+        case "fact_check_failed":
+          return <Badge variant="destructive" className="flex items-center gap-1">
+            <AlertTriangle className="h-3 w-3" />
+            Fact Check Failed
+          </Badge>;
+        case "completed":
+          return <Badge variant="outline" className="bg-green-900/20 text-green-400 border-green-800">Completed</Badge>;
+        case "failed":
+          return <Badge variant="destructive">Failed</Badge>;
+        default:
+          break;
+      }
+    }
+    
+    // Fall back to the old behavior if no status or for backward compatibility
+    if (post.fact_check_results) {
+      return post.fact_check_results.issues.length === 0 ? (
+        <Badge variant="success" className="flex items-center gap-1">
+          <Check className="h-3 w-3" />
+          Fact Checked
+        </Badge>
+      ) : (
+        <Badge variant="destructive" className="flex items-center gap-1">
+          <AlertTriangle className="h-3 w-3" />
+          Issues Found
+        </Badge>
+      );
+    } else {
+      return (
+        <Badge variant="outline" className="flex items-center gap-1 bg-[#1a1f3d] text-gray-300">
+          <Clock className="h-3 w-3" />
+          Not Checked
+        </Badge>
+      );
     }
   };
 
@@ -395,24 +465,7 @@ const BlogPostsPage = () => {
                             </CardDescription>
                           </div>
                           <div className="flex items-center">
-                            {post.fact_check_results ? (
-                              post.fact_check_results.issues.length === 0 ? (
-                                <Badge variant="success" className="flex items-center gap-1">
-                                  <Check className="h-3 w-3" />
-                                  Fact Checked
-                                </Badge>
-                              ) : (
-                                <Badge variant="destructive" className="flex items-center gap-1">
-                                  <AlertTriangle className="h-3 w-3" />
-                                  Issues Found
-                                </Badge>
-                              )
-                            ) : (
-                              <Badge variant="outline" className="flex items-center gap-1 bg-[#1a1f3d] text-gray-300">
-                                <Clock className="h-3 w-3" />
-                                Not Checked
-                              </Badge>
-                            )}
+                            {getPostStatusBadge(post)}
                           </div>
                         </div>
                       </CardHeader>
