@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import FactCheckResults from "./FactCheckResults";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
+import { Json } from "@/integrations/supabase/types";
 
 interface GeneratedPostProps {
   topic: string;
@@ -193,7 +194,7 @@ const GeneratedPost = ({
   };
 
   // Transform raw API issues to the format expected by FactCheckResults
-  const mapApiIssues = (rawIssues: RawFactCheckIssue[]): FactCheckIssue[] => {
+  const mapApiIssues = (rawIssues: Json): FactCheckIssue[] => {
     console.log('Mapping API issues:', rawIssues);
     
     if (!Array.isArray(rawIssues)) {
@@ -201,7 +202,20 @@ const GeneratedPost = ({
       return [];
     }
 
-    return rawIssues.map(issue => {
+    return rawIssues.map((issue: any) => {
+      if (!issue || typeof issue !== 'object') {
+        console.error('Invalid issue object:', issue);
+        return {
+          claim: "Unknown claim",
+          issue: "Error processing this issue",
+          suggestion: "Please refresh and try again",
+          severity: "minor" as "minor",
+          confidence: 60,
+          resolved: false,
+          ignored: false
+        };
+      }
+
       // Determine severity based on content of the explanation
       let severity: "critical" | "major" | "minor" = "major";
       
@@ -221,9 +235,9 @@ const GeneratedPost = ({
       const confidence = Math.floor(Math.random() * 39) + 60;
       
       return {
-        claim: issue.quote,
-        issue: issue.explanation,
-        suggestion: issue.correction,
+        claim: issue.quote || "",
+        issue: issue.explanation || "",
+        suggestion: issue.correction || "",
         source: issue.source,
         resolved: false,
         severity,
@@ -357,6 +371,11 @@ const GeneratedPost = ({
         ? "The issue has been restored to your active list." 
         : "The issue has been moved to ignored status.",
     });
+  };
+
+  // Handle fact check status change from FactCheckResults component
+  const handleFactCheckStatusChange = (isChecking: boolean) => {
+    setIsFactChecking(isChecking);
   };
 
   // Count active (non-ignored, non-fixed) issues
@@ -649,6 +668,7 @@ const GeneratedPost = ({
                       content={currentContent}
                       onContentUpdated={handleContentUpdated}
                       onIgnoreIssue={handleIgnoreIssue}
+                      onFactCheckStatusChange={handleFactCheckStatusChange}
                     />
                   )}
                 </AnimatePresence>

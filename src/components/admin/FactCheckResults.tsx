@@ -16,6 +16,7 @@ interface FactCheckResultsProps {
   onContentUpdated?: (newContent: string, fixedIndices?: number[]) => void;
   content?: string;
   onIgnoreIssue?: (index: number) => void;
+  onFactCheckStatusChange?: (isChecking: boolean) => void;
 }
 
 const FactCheckResults = ({ 
@@ -24,7 +25,8 @@ const FactCheckResults = ({
   postId, 
   onContentUpdated, 
   content,
-  onIgnoreIssue
+  onIgnoreIssue,
+  onFactCheckStatusChange
 }: FactCheckResultsProps) => {
   const [fixingIssues, setFixingIssues] = useState<Set<number>>(new Set());
   const [fixedIssues, setFixedIssues] = useState<Set<number>>(new Set());
@@ -239,7 +241,11 @@ const FactCheckResults = ({
       return;
     }
 
-    setIsLoading(true);
+    // Notify parent component we're checking facts
+    if (onFactCheckStatusChange) {
+      onFactCheckStatusChange(true);
+    }
+    
     setFactCheckStatus("checking");
     
     try {
@@ -274,7 +280,10 @@ const FactCheckResults = ({
       });
       setFactCheckStatus("error");
     } finally {
-      setIsLoading(false);
+      // Notify parent component we're done checking facts
+      if (onFactCheckStatusChange) {
+        onFactCheckStatusChange(false);
+      }
     }
   };
 
