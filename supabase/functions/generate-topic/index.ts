@@ -94,12 +94,17 @@ IMPORTANT: Return ONLY the title, nothing else. Do not add any descriptions, mar
     const validatedTitle = validateTitle(cleanedTitle);
     console.log('Validated title:', validatedTitle);
 
-    return new Response(JSON.stringify({ topic: validatedTitle }), {
+    // CHANGED: Return an array of topics under the "topics" key to match what process-scheduled-posts expects
+    const result = { topics: [validatedTitle] };
+    console.log('Sending response with format:', result);
+
+    return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('Error generating topic:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    // CHANGED: Even in error case, return an empty array in the expected format
+    return new Response(JSON.stringify({ topics: [], error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
