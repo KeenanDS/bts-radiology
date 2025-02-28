@@ -1,387 +1,269 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders } from "../_shared/cors.ts";
+// Follow this setup guide to integrate the Deno runtime into your application:
+// https://docs.supabase.com/guides/functions/connect-to-postgres
 
-interface RequestBody {
-  content: string;
-  postId?: string;
-  action?: string;
-  issueIndex?: number;
-  claim?: string;
-  issue?: string;
-  suggestion?: string;
-}
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// This function handles fact-checking via the Perplexity API
-serve(async (req) => {
-  // Handle CORS preflight requests
+// Adjust these to match your environment variables names
+const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const perplexityApiKey = Deno.env.get("PERPLEXITY_API_KEY");
+
+// CORS headers for browser requests
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+Deno.serve(async (req) => {
+  // Handle CORS preflight request
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  // Check if this is a POST request
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      { 
+        status: 405,
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      }
+    );
   }
 
   try {
-    const { content, postId, action, issueIndex, claim, issue, suggestion } = await req.json() as RequestBody;
-    
-    if (!content) {
+    // Parse request body
+    const { postId, content } = await req.json();
+
+    // Validate required parameters
+    if (!postId && !content) {
       return new Response(
-        JSON.stringify({ error: "Content is required" }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        JSON.stringify({ error: "Either postId or content is required" }),
+        { 
           status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       );
     }
 
-    console.log(`Received content for fact checking (${content.length} characters)`);
-    console.log(`Post ID: ${postId || 'Not provided'}`);
-    console.log(`Action: ${action || 'fact-check'}`);
+    // Create Supabase client
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Handle revision action
-    if (action === 'revise') {
-      if (issueIndex === undefined || !claim || !issue || !suggestion) {
-        return new Response(
-          JSON.stringify({ 
-            error: "Missing required parameters for revision", 
-            success: false 
-          }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 400,
-          }
-        );
-      }
+    // If we have a postId but no content, fetch the content from the database
+    let postContent = content;
+    let blogPostId = postId;
 
-      const revisedContent = await reviseContent(content, claim, issue, suggestion);
+    if (postId && !content) {
+      console.log(`Fetching content for post ID: ${postId}`);
       
-      // Store the revised content in the database if postId is provided
-      if (postId) {
-        await updatePostContent(postId, revisedContent);
+      const { data: post, error: fetchError } = await supabase
+        .from("blog_posts")
+        .select("id, content")
+        .eq("id", postId)
+        .single();
+      
+      if (fetchError) {
+        throw new Error(`Failed to fetch blog post: ${fetchError.message}`);
       }
       
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          revisedContent,
-          revisedAt: new Date().toISOString()
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        }
-      );
-    }
-    
-    // Default action: fact-checking
-    const issues = await factCheckContent(content);
-    
-    // Store results in the database if postId is provided
-    if (postId) {
-      await storeFactCheckResults(postId, issues);
-    }
-    
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        issues,
-        checkedAt: new Date().toISOString()
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
+      if (!post) {
+        throw new Error(`Blog post with ID ${postId} not found`);
       }
-    );
-  } catch (error) {
-    console.error("Error in fact-check-post function:", error);
-    
-    // Handle specific API errors
-    if (error.message && error.message.includes('API')) {
+      
+      postContent = post.content;
+    } else if (content && !postId) {
+      // If we have content but no postId, we'll fact check without saving results
+      console.log("Fact checking content without saving results to database");
+    }
+
+    // Check if Perplexity API key is available
+    if (!perplexityApiKey) {
       return new Response(
         JSON.stringify({ 
-          error: "Error calling Perplexity API", 
-          details: error.message,
+          error: "PERPLEXITY_API_KEY environment variable is not set",
           success: false
         }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        { 
           status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       );
     }
+
+    console.log("Starting fact check process");
+
+    // Perform fact checking with Perplexity API
+    const factCheckIssues = await performFactCheck(postContent);
+
+    // If we have a postId, save the fact check results to the database
+    if (blogPostId) {
+      console.log(`Saving fact check results for post ID: ${blogPostId}`);
+      
+      // Check if a fact check result already exists for this post
+      const { data: existingCheck } = await supabase
+        .from("fact_check_results")
+        .select("id")
+        .eq("post_id", blogPostId)
+        .maybeSingle();
+      
+      if (existingCheck) {
+        // Update existing fact check result
+        const { error: updateError } = await supabase
+          .from("fact_check_results")
+          .update({
+            issues: factCheckIssues,
+            checked_at: new Date().toISOString()
+          })
+          .eq("id", existingCheck.id);
+        
+        if (updateError) {
+          throw new Error(`Failed to update fact check results: ${updateError.message}`);
+        }
+      } else {
+        // Insert new fact check result
+        const { error: insertError } = await supabase
+          .from("fact_check_results")
+          .insert({
+            post_id: blogPostId,
+            issues: factCheckIssues,
+            checked_at: new Date().toISOString()
+          });
+        
+        if (insertError) {
+          throw new Error(`Failed to insert fact check results: ${insertError.message}`);
+        }
+      }
+    }
+
+    // Return successful response
+    return new Response(
+      JSON.stringify({
+        success: true,
+        issues: factCheckIssues,
+        message: "Fact check completed successfully"
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (error) {
+    console.error("Error:", error);
     
     return new Response(
-      JSON.stringify({ 
-        error: "Internal server error", 
-        details: error.message,
-        success: false
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      JSON.stringify({ success: false, error: error.message }),
+      { 
         status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
       }
     );
   }
 });
 
-// Function to call Perplexity API for revising content
-async function reviseContent(content: string, claim: string, issue: string, suggestion: string) {
-  const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY");
+async function performFactCheck(content) {
+  console.log("Performing fact check with Perplexity API");
   
-  if (!PERPLEXITY_API_KEY) {
-    throw new Error("PERPLEXITY_API_KEY environment variable is not set");
-  }
-  
-  const prompt = `
-You are a highly skilled content editor who specializes in fixing factual errors in blog posts while maintaining the style and voice of the original content.
-
-I'll provide you with a blog post and a specific factual issue that needs to be fixed. Please update ONLY the problematic part while preserving the overall context, style, and structure of the content.
-
-Original content: 
-"""
-${content}
-"""
-
-Problematic claim: "${claim}"
-
-Issue with the claim: "${issue}"
-
-Suggested correction: "${suggestion}"
-
-Please return the entire revised content with the factual error fixed. Make sure your changes are seamless and maintain the flow of the original text. Only change what's necessary to correct the factual error.
-`;
-
   try {
-    console.log("Calling Perplexity API for content revision...");
-    
-    const response = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${PERPLEXITY_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "sonar-pro",
-        messages: [
-          {
-            role: "system",
-            content: "You are a content revision assistant that fixes factual inaccuracies in blog posts.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.2, // Low temperature for more accurate revisions
-        max_tokens: 4000,
-        top_p: 1,
-      }),
-    });
+    // Prepare prompt for fact checking
+    const prompt = `
+You are a critical fact-checker evaluating the accuracy of the following blog post. 
+Identify and list any factual errors, misleading statements, or claims that need verification.
+For each issue, provide:
+1. The exact quote from the text
+2. An explanation of why it's problematic
+3. A suggested correction
+4. Source information when applicable
 
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error("Perplexity API error:", errorData);
-      throw new Error(`API returned ${response.status}: ${errorData}`);
-    }
+ONLY identify factual issues, not style, grammar or opinion issues. 
+If there are no factual issues, return an empty array.
 
-    const data = await response.json();
-    console.log("Perplexity API revision response received");
-    
-    // Extract the response content
-    const revisedContent = data.choices[0]?.message?.content;
-    
-    if (!revisedContent) {
-      console.error("No content in API response:", data);
-      throw new Error("No revised content received from API");
-    }
-    
-    return revisedContent;
-  } catch (error) {
-    console.error("Error calling Perplexity API for revision:", error);
-    throw error;
-  }
-}
-
-// Function to call Perplexity API for fact checking
-async function factCheckContent(content: string) {
-  const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY");
-  
-  if (!PERPLEXITY_API_KEY) {
-    throw new Error("PERPLEXITY_API_KEY environment variable is not set");
-  }
-  
-  const prompt = `
-You are a highly skilled fact-checker with expertise in identifying factual inaccuracies in written content.
-
-I'll provide you with a blog post. Please analyze it carefully and identify any factual claims that:
-1. Contain false information
-2. Present misleading statistics or data
-3. Make unsubstantiated claims without evidence
-4. Contain historical inaccuracies
-5. Misrepresent scientific consensus or research findings
-
-For each issue you find, please provide:
-- The exact quote or claim from the text that contains the inaccuracy
-- A detailed explanation of why it's inaccurate or misleading
-- The correct information or context that should be presented instead
-
-If you don't find any factual issues, respond with an empty array.
-
-Format your response as a JSON array of objects with the following structure:
-\`\`\`
-[
-  {
-    "quote": "The exact text containing the inaccuracy",
-    "explanation": "Why this is inaccurate",
-    "correction": "The corrected information"
-  }
-]
-\`\`\`
-
-If no issues are found, return an empty array: []
-
-Here's the content to fact-check:
-
+Format your response as a valid JSON array of objects with these keys: quote, explanation, correction, source.
+BLOG POST CONTENT:
 ${content}
 `;
 
-  try {
-    console.log("Calling Perplexity API for fact checking...");
-    
+    // Call Perplexity API
     const response = await fetch("https://api.perplexity.ai/chat/completions", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${PERPLEXITY_API_KEY}`,
+        "Authorization": `Bearer ${perplexityApiKey}`,
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "sonar-pro",
+        model: "llama-3.1-sonar-small-128k-online",
         messages: [
           {
             role: "system",
-            content: "You are a fact-checking assistant that identifies factual inaccuracies in content.",
+            content: "You are a professional fact-checker who evaluates the accuracy of content."
           },
           {
             role: "user",
-            content: prompt,
-          },
+            content: prompt
+          }
         ],
-        temperature: 0.1, // Low temperature for more factual responses
-        max_tokens: 4000,
-        top_p: 1,
-        frequency_penalty: 0.1,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error("Perplexity API error:", errorData);
-      throw new Error(`API returned ${response.status}: ${errorData}`);
-    }
-
-    const data = await response.json();
-    console.log("Perplexity API response received");
-    
-    // Extract the response content
-    const responseContent = data.choices[0]?.message?.content;
-    
-    if (!responseContent) {
-      console.error("No content in API response:", data);
-      return [];
-    }
-    
-    // Extract JSON array from the response
-    try {
-      // First try to parse the whole response as JSON
-      const parsedIssues = JSON.parse(responseContent);
-      if (Array.isArray(parsedIssues)) {
-        return parsedIssues;
-      }
-      
-      // If that fails, try to extract JSON from text
-      const jsonMatch = responseContent.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        const extractedJson = jsonMatch[0];
-        return JSON.parse(extractedJson);
-      }
-      
-      console.log("Could not extract JSON array from response, returning empty array");
-      return [];
-    } catch (error) {
-      console.error("Error parsing fact check results:", error);
-      console.log("Response content:", responseContent);
-      return [];
-    }
-  } catch (error) {
-    console.error("Error calling Perplexity API:", error);
-    throw error;
-  }
-}
-
-// Function to store fact check results in the database
-async function storeFactCheckResults(postId: string, issues: any[]) {
-  try {
-    // Create PostgreSQL client
-    const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
-    
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
-    // Store results in the fact_check_results table
-    const { data, error } = await supabase
-      .from("fact_check_results")
-      .upsert(
-        {
-          post_id: postId,
-          issues: issues,
-          checked_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        },
-        { onConflict: "post_id" }
-      );
-      
-    if (error) {
-      console.error("Error storing fact check results:", error);
-    } else {
-      console.log("Fact check results saved successfully");
-    }
-    
-    return data;
-  } catch (error) {
-    console.error("Error in storeFactCheckResults:", error);
-    throw error;
-  }
-}
-
-// Function to update post content in the database
-async function updatePostContent(postId: string, content: string) {
-  try {
-    // Create PostgreSQL client
-    const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
-    
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
-    // Update the blog post content
-    const { data, error } = await supabase
-      .from("blog_posts")
-      .update({
-        content: content,
-        updated_at: new Date().toISOString()
+        temperature: 0.2,
+        max_tokens: 3000,
+        top_p: 0.9,
+        frequency_penalty: 0.0,
+        presence_penalty: 0.0
       })
-      .eq("id", postId);
-      
-    if (error) {
-      console.error("Error updating post content:", error);
-    } else {
-      console.log("Post content updated successfully");
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Perplexity API error: ${response.status} ${response.statusText} - ${errorText}`);
     }
-    
-    return data;
+
+    const responseData = await response.json();
+    console.log("Received response from Perplexity API");
+
+    // Extract the AI's response text
+    const aiResponse = responseData.choices && 
+                       responseData.choices[0] && 
+                       responseData.choices[0].message && 
+                       responseData.choices[0].message.content;
+
+    if (!aiResponse) {
+      throw new Error("Invalid response from Perplexity API");
+    }
+
+    // Try to parse the JSON from the AI's response
+    try {
+      // First attempt to extract a JSON array if it's embedded in markdown or text
+      const jsonMatch = aiResponse.match(/\[[\s\S]*\]/);
+      
+      if (jsonMatch) {
+        const issues = JSON.parse(jsonMatch[0]);
+        console.log(`Found ${issues.length} fact check issues`);
+        return issues;
+      } else {
+        // If no JSON array is found and the response indicates no issues
+        if (aiResponse.toLowerCase().includes("no factual issues") || 
+            aiResponse.toLowerCase().includes("no issues found") || 
+            aiResponse.toLowerCase().includes("empty array")) {
+          console.log("No fact check issues found");
+          return [];
+        }
+        
+        // If we get here, try to parse the entire response as JSON
+        try {
+          const issues = JSON.parse(aiResponse);
+          if (Array.isArray(issues)) {
+            console.log(`Found ${issues.length} fact check issues`);
+            return issues;
+          } else {
+            console.warn("Response is valid JSON but not an array, returning empty array");
+            return [];
+          }
+        } catch (e) {
+          console.warn("Failed to parse AI response as JSON, returning empty array");
+          return [];
+        }
+      }
+    } catch (parseError) {
+      console.error("Error parsing fact check results:", parseError);
+      throw new Error(`Failed to parse fact check results: ${parseError.message}`);
+    }
   } catch (error) {
-    console.error("Error in updatePostContent:", error);
-    throw error;
+    console.error("Error during fact checking:", error);
+    throw new Error(`Fact check failed: ${error.message}`);
   }
 }

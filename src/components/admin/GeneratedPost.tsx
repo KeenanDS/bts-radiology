@@ -1,7 +1,8 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Save, Loader2, CheckCircle, ChevronLeft, RefreshCw, ArrowLeft } from "lucide-react";
+import { Save, Loader2, CheckCircle, ChevronLeft, RefreshCw, ArrowLeft, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -66,6 +67,8 @@ const GeneratedPost = ({
   const [factCheckRun, setFactCheckRun] = useState(false);
   // Track fixed issues
   const [fixedIssueIndices, setFixedIssueIndices] = useState<Set<number>>(new Set());
+  // Track status of fact check
+  const [factCheckStatus, setFactCheckStatus] = useState<string>("not_started");
   const { toast } = useToast();
 
   // Update currentContent when generatedPost changes
@@ -85,6 +88,47 @@ const GeneratedPost = ({
       console.log("First meta description:", metaDescriptions[0]);
     }
   }, [metaDescriptions]);
+
+  // Check fact check status when postId changes
+  useEffect(() => {
+    if (postId) {
+      checkFactCheckStatus();
+    }
+  }, [postId]);
+
+  const checkFactCheckStatus = async () => {
+    if (!postId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from("fact_check_results")
+        .select("*")
+        .eq("post_id", postId)
+        .maybeSingle();
+        
+      if (error) {
+        console.error("Error fetching fact check status:", error);
+        setFactCheckStatus("error");
+      } else if (data) {
+        console.log("Fact check data:", data);
+        setFactCheckStatus("completed");
+        if (data.issues && Array.isArray(data.issues) && data.issues.length > 0) {
+          // Transform API issues to the format expected by FactCheckResults
+          const transformedIssues = mapApiIssues(data.issues);
+          setFactCheckIssues(transformedIssues);
+          setFactCheckRun(true);
+        } else {
+          setFactCheckIssues([]);
+          setFactCheckRun(true);
+        }
+      } else {
+        setFactCheckStatus("not_checked");
+      }
+    } catch (err) {
+      console.error("Error in fact check status check:", err);
+      setFactCheckStatus("error");
+    }
+  };
 
   const handleSave = async () => {
     if (!selectedMetaDescription) {
@@ -161,7 +205,7 @@ const GeneratedPost = ({
       // Determine severity based on content of the explanation
       let severity: "critical" | "major" | "minor" = "major";
       
-      const explanation = issue.explanation.toLowerCase();
+      const explanation = (issue.explanation || "").toLowerCase();
       if (explanation.includes("incorrect") || 
           explanation.includes("false") || 
           explanation.includes("misleading")) {
@@ -190,7 +234,17 @@ const GeneratedPost = ({
   };
 
   const handleFactCheck = async () => {
+    if (!postId) {
+      toast({
+        title: "Error",
+        description: "Please save the post before fact checking.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsFactChecking(true);
+    setFactCheckStatus("checking");
     
     try {
       // Log the content being sent for fact-checking
@@ -199,8 +253,8 @@ const GeneratedPost = ({
       
       const { data, error } = await supabase.functions.invoke('fact-check-post', {
         body: JSON.stringify({ 
-          content: currentContent,
-          postId
+          postId,
+          content: currentContent
         })
       });
 
@@ -217,6 +271,7 @@ const GeneratedPost = ({
       setFactCheckIssues(transformedIssues);
       // Mark that fact check has been run
       setFactCheckRun(true);
+      setFactCheckStatus("completed");
       
       toast({
         title: "Fact Check Complete",
@@ -226,6 +281,7 @@ const GeneratedPost = ({
       });
     } catch (error) {
       console.error('Error fact-checking post:', error);
+      setFactCheckStatus("error");
       toast({
         title: "Error",
         description: "Failed to complete fact check. Please try again.",
@@ -308,6 +364,53 @@ const GeneratedPost = ({
     !issue.ignored && !issue.resolved && !fixedIssueIndices.has(factCheckIssues.indexOf(issue))
   ).length;
 
+  // Get fact check status badge
+  const getFactCheckStatusBadge = () => {
+    switch (factCheckStatus) {
+      case "not_started":
+      case "not_checked":
+        return (
+          <Badge variant="outline" className="bg-yellow-900/20 text-yellow-400 border-yellow-800">
+            Not Checked
+          </Badge>
+        );
+      case "checking":
+        return (
+          <Badge variant="outline" className="bg-blue-900/20 text-blue-400 border-blue-800">
+            Checking...
+          </Badge>
+        );
+      case "completed":
+        if (factCheckIssues.length === 0) {
+          return (
+            <Badge variant="outline" className="bg-green-900/20 text-green-400 border-green-800">
+              Verified
+            </Badge>
+          );
+        } else if (activeIssueCount === 0) {
+          return (
+            <Badge variant="outline" className="bg-green-900/20 text-green-400 border-green-800">
+              Issues Fixed
+            </Badge>
+          );
+        } else {
+          return (
+            <Badge variant="outline" className="bg-red-900/20 text-red-400 border-red-800">
+              {activeIssueCount} {activeIssueCount === 1 ? 'Issue' : 'Issues'}
+            </Badge>
+          );
+        }
+      case "error":
+        return (
+          <Badge variant="outline" className="bg-red-900/20 text-red-400 border-red-800">
+            Error
+          </Badge>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -339,7 +442,9 @@ const GeneratedPost = ({
               AI-generated blog post based on your topic
             </p>
           </div>
-          <div>
+          <div className="flex items-center space-x-3">
+            {postId && getFactCheckStatusBadge()}
+            
             {!isSaved ? (
               <TooltipProvider>
                 <Tooltip>
@@ -501,16 +606,20 @@ const GeneratedPost = ({
                   <div>
                     <CardTitle className="text-white text-xl mb-1">Fact Check Results</CardTitle>
                     <CardDescription className="text-gray-400">
-                      {factCheckIssues.length === 0 && !factCheckRun
+                      {factCheckStatus === "not_checked" || factCheckStatus === "not_started"
                         ? "Run a fact check to verify your content" 
-                        : factCheckIssues.length === 0 && factCheckRun
+                        : factCheckStatus === "checking"
+                        ? "Checking your content for factual issues..."
+                        : factCheckStatus === "error"
+                        ? "Error during fact checking"
+                        : factCheckIssues.length === 0
                         ? "No issues found in your content"
                         : activeIssueCount === 0
                         ? "All issues have been resolved"
                         : `${activeIssueCount} potential ${activeIssueCount === 1 ? 'issue' : 'issues'} found`}
                     </CardDescription>
                   </div>
-                  {factCheckIssues.length > 0 && (
+                  {factCheckStatus === "completed" && factCheckIssues.length > 0 && (
                     <Badge 
                       variant={activeIssueCount > 0 ? "default" : "success"}
                       className={`${activeIssueCount > 0 ? 'bg-[#2a2f5d] hover:bg-[#3a3f7d]' : 'bg-emerald-600'} transition-colors px-3 py-1 text-sm`}
@@ -522,7 +631,7 @@ const GeneratedPost = ({
               </CardHeader>
               <CardContent className="pt-4">
                 <AnimatePresence mode="wait">
-                  {isFactChecking ? (
+                  {isFactChecking || factCheckStatus === "checking" ? (
                     <motion.div
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -532,7 +641,7 @@ const GeneratedPost = ({
                       <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
                       <p className="text-gray-400">Checking facts and accuracy...</p>
                     </motion.div>
-                  ) : factCheckIssues.length > 0 ? (
+                  ) : (
                     <FactCheckResults 
                       issues={factCheckIssues}
                       isLoading={isFactChecking}
@@ -541,24 +650,6 @@ const GeneratedPost = ({
                       onContentUpdated={handleContentUpdated}
                       onIgnoreIssue={handleIgnoreIssue}
                     />
-                  ) : (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="flex flex-col items-center justify-center py-6 space-y-3 text-center"
-                    >
-                      {factCheckRun ? (
-                        <>
-                          <CheckCircle className="h-12 w-12 text-emerald-500" />
-                          <p className="text-gray-300">No issues detected. Content ready to publish!</p>
-                        </>
-                      ) : (
-                        <div className="text-gray-300 py-4">
-                          <p>Click the 'Fact Check' button to verify your content.</p>
-                        </div>
-                      )}
-                    </motion.div>
                   )}
                 </AnimatePresence>
               </CardContent>

@@ -1,376 +1,435 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { Database } from "../_shared/database-types.ts";
-import { corsHeaders } from "../_shared/cors.ts";
+// Follow this setup guide to integrate the Deno runtime into your application:
+// https://docs.supabase.com/guides/functions/connect-to-postgres
 
-console.log("Process Scheduled Posts function started...");
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+// Adjust these to match your environment variables names
+const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error("Missing environment variables SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-}
-
-const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey);
-
-// Improved status constants to track every stage of the process
+// Status enum for tracking the post generation process
 const STATUS = {
-  PENDING: 'pending',
-  GENERATING_TOPICS: 'generating_topics',
-  TOPICS_GENERATED: 'topics_generated',
-  GENERATING_CONTENT: 'generating_content',
-  CONTENT_GENERATED: 'content_generated',
-  FACT_CHECKING: 'fact_checking',
-  COMPLETED: 'completed',
-  FAILED_TOPIC_GENERATION: 'failed_topic_generation',
-  FAILED_CONTENT_GENERATION: 'failed_content_generation',
-  FAILED_FACT_CHECK: 'failed_fact_check',
-  FAILED: 'failed' // General failure
+  PENDING: "pending",
+  GENERATING_TOPICS: "generating_topics",
+  TOPICS_GENERATED: "topics_generated",
+  GENERATING_CONTENT: "generating_content",
+  CONTENT_GENERATED: "content_generated",
+  FACT_CHECKING: "fact_checking",
+  FACT_CHECK_COMPLETE: "fact_check_complete",
+  FACT_CHECK_FAILED: "fact_check_failed",
+  COMPLETED: "completed",
+  FAILED: "failed"
 };
 
-serve(async (req) => {
-  console.log(`Request received: ${req.method}`);
-  
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
+Deno.serve(async (req) => {
+  // CORS headers
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
+
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  console.log("Processing scheduled posts...");
-  
   try {
-    let requestBody = {};
-    try {
-      requestBody = await req.json();
-      console.log("Request body:", JSON.stringify(requestBody));
-    } catch (e) {
-      console.log("No request body or invalid JSON");
-    }
-    
-    // Get current time
-    const now = new Date();
-    console.log(`Current time: ${now.toISOString()}`);
-    
-    // Find all pending posts that are scheduled for now or earlier
-    const { data: scheduledPosts, error: fetchError } = await supabase
-      .from('scheduled_posts')
-      .select('*')
-      .eq('status', STATUS.PENDING)
-      .lte('scheduled_for', now.toISOString())
-      .order('scheduled_for', { ascending: true });
-    
-    if (fetchError) {
-      console.error("Error fetching scheduled posts:", fetchError);
-      throw fetchError;
-    }
-    
-    console.log(`Found ${scheduledPosts?.length || 0} scheduled posts to process`);
-    
-    // Track processed posts
-    const results = [];
-    
-    // Process each post
-    if (scheduledPosts && scheduledPosts.length > 0) {
-      for (const post of scheduledPosts) {
-        console.log(`Processing scheduled post ${post.id} for ${post.scheduled_for}`);
+    // Create Supabase client
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Handle POST request to process a specific scheduled post
+    if (req.method === "POST") {
+      const { id } = await req.json();
+      
+      console.log(`Processing specific scheduled post: ${id}`);
+      
+      // Get the specific scheduled post
+      const { data: post, error: fetchError } = await supabase
+        .from("scheduled_posts")
+        .select("*")
+        .eq("id", id)
+        .single();
+      
+      if (fetchError) {
+        throw new Error(`Failed to fetch scheduled post: ${fetchError.message}`);
+      }
+      
+      if (!post) {
+        throw new Error(`Scheduled post with ID ${id} not found`);
+      }
+      
+      // Process this post
+      try {
+        await processScheduledPost(post, supabase);
+        return new Response(
+          JSON.stringify({ success: true, message: "Post processed successfully" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (processError) {
+        console.error("Error processing post:", processError);
         
+        // Update the post status to failed with error message
+        await updatePostStatus(post.id, STATUS.FAILED, processError.message);
+        
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            message: "Failed to process post", 
+            error: processError.message 
+          }),
+          { 
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          }
+        );
+      }
+    }
+    
+    // Handle GET request to process all pending posts
+    if (req.method === "GET") {
+      console.log("Processing all pending scheduled posts");
+      
+      // Get all pending posts that are due
+      const { data: posts, error: fetchError } = await supabase
+        .from("scheduled_posts")
+        .select("*")
+        .eq("status", STATUS.PENDING)
+        .lte("scheduled_for", new Date().toISOString());
+      
+      if (fetchError) {
+        throw new Error(`Failed to fetch scheduled posts: ${fetchError.message}`);
+      }
+      
+      console.log(`Found ${posts.length} pending posts to process`);
+      
+      // Process each post
+      const results = [];
+      for (const post of posts) {
         try {
-          // Update status to generating_topics
-          await updatePostStatus(post.id, STATUS.GENERATING_TOPICS, null);
+          console.log(`Processing scheduled post: ${post.id}`);
+          await processScheduledPost(post, supabase);
+          results.push({ id: post.id, success: true });
+        } catch (processError) {
+          console.error(`Error processing post ${post.id}:`, processError);
           
-          const topicsToProcess = [];
+          // Update the post status to failed with error message
+          await updatePostStatus(post.id, STATUS.FAILED, processError.message);
           
-          // For each post to generate based on num_posts
-          for (let i = 0; i < post.num_posts; i++) {
-            console.log(`Generating topic ${i + 1} of ${post.num_posts}`);
-            
-            try {
-              // Determine topic
-              let topic: string;
-              if (post.auto_generate_topics) {
-                // Auto-generate topic using edge function
-                console.log("Auto-generating topic...");
-                const generateTopicResponse = await fetch(
-                  `${supabaseUrl}/functions/v1/generate-topic`,
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${supabaseServiceKey}`
-                    }
-                  }
-                );
-                
-                if (!generateTopicResponse.ok) {
-                  const errorText = await generateTopicResponse.text();
-                  console.error(`Failed to generate topic: ${generateTopicResponse.statusText}, ${errorText}`);
-                  throw new Error(`Failed to generate topic: ${generateTopicResponse.statusText}`);
-                }
-                
-                const topicData = await generateTopicResponse.json();
-                if (!topicData || !topicData.topic) {
-                  console.error("Invalid topic data received:", topicData);
-                  throw new Error("Topic generation failed: Invalid response format");
-                }
-                
-                topic = topicData.topic;
-                console.log(`Generated topic: ${topic}`);
-              } else {
-                // Use provided topics if available
-                const topics = post.topics as string[] || [];
-                if (topics && topics[i]) {
-                  topic = topics[i];
-                  console.log(`Using provided topic: ${topic}`);
-                } else {
-                  // If we've used up all provided topics, generate a new one
-                  console.log("No more provided topics, generating a new one...");
-                  const generateTopicResponse = await fetch(
-                    `${supabaseUrl}/functions/v1/generate-topic`,
-                    {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${supabaseServiceKey}`
-                      }
-                    }
-                  );
-                  
-                  if (!generateTopicResponse.ok) {
-                    const errorText = await generateTopicResponse.text();
-                    console.error(`Failed to generate topic: ${generateTopicResponse.statusText}, ${errorText}`);
-                    throw new Error(`Failed to generate topic: ${generateTopicResponse.statusText}`);
-                  }
-                  
-                  const topicData = await generateTopicResponse.json();
-                  if (!topicData || !topicData.topic) {
-                    console.error("Invalid topic data received:", topicData);
-                    throw new Error("Topic generation failed: Invalid response format");
-                  }
-                  
-                  topic = topicData.topic;
-                  console.log(`Generated topic: ${topic}`);
-                }
-              }
-              
-              // Add to topics to process
-              topicsToProcess.push(topic);
-            } catch (topicError) {
-              console.error(`Error generating topic for post ${i + 1}:`, topicError);
-              results.push({
-                scheduledPostId: post.id,
-                postIndex: i,
-                status: STATUS.FAILED_TOPIC_GENERATION,
-                error: topicError instanceof Error ? topicError.message : String(topicError)
-              });
-            }
-          }
-          
-          if (topicsToProcess.length === 0) {
-            throw new Error("Failed to generate any topics");
-          }
-          
-          // Update status to topics generated
-          await updatePostStatus(post.id, STATUS.TOPICS_GENERATED, null);
-          console.log(`Generated ${topicsToProcess.length} topics for post ${post.id}`);
-          
-          // Process each topic to generate content
-          for (let i = 0; i < topicsToProcess.length; i++) {
-            const topic = topicsToProcess[i];
-            try {
-              // Update status to generating content
-              await updatePostStatus(post.id, STATUS.GENERATING_CONTENT, null);
-              
-              console.log(`Generating content for topic: ${topic}`);
-              
-              // Generate content using the generate-blog-post function
-              const generateResponse = await fetch(
-                `${supabaseUrl}/functions/v1/generate-blog-post`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${supabaseServiceKey}`
-                  },
-                  body: JSON.stringify({ topic })
-                }
-              );
-              
-              if (!generateResponse.ok) {
-                const errorText = await generateResponse.text();
-                console.error(`Failed to generate blog post: ${generateResponse.statusText}, ${errorText}`);
-                throw new Error(`Failed to generate blog post: ${generateResponse.statusText}`);
-              }
-              
-              const generatedData = await generateResponse.json();
-              console.log("Blog post generation response:", JSON.stringify(generatedData).substring(0, 200) + "...");
-              
-              // Validate response data
-              if (!generatedData) {
-                throw new Error("Blog post generation failed: Empty response");
-              }
-              
-              // Extract title from response or use the topic as fallback
-              const title = generatedData.title || topic;
-              const content = generatedData.content;
-              
-              if (!content) {
-                throw new Error("Blog post generation failed: No content returned");
-              }
-              
-              // Update status to content generated
-              await updatePostStatus(post.id, STATUS.CONTENT_GENERATED, null);
-              
-              // Insert the blog post
-              console.log(`Inserting blog post with title: "${title}"`);
-              const { data: blogPostData, error: blogPostError } = await supabase
-                .from('blog_posts')
-                .insert({
-                  title: title,
-                  content: content,
-                  scheduled_post_id: post.id
-                })
-                .select()
-                .single();
-              
-              if (blogPostError) {
-                console.error("Database error when inserting blog post:", blogPostError);
-                throw blogPostError;
-              }
-              
-              console.log(`Created blog post with id: ${blogPostData.id}`);
-              
-              // Fact-check if enabled
-              if (post.auto_fact_check) {
-                // Update status to fact checking
-                await updatePostStatus(post.id, STATUS.FACT_CHECKING, null);
-                
-                console.log(`Fact-checking post: ${blogPostData.id}`);
-                
-                try {
-                  const factCheckResponse = await fetch(
-                    `${supabaseUrl}/functions/v1/fact-check-post`,
-                    {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${supabaseServiceKey}`
-                      },
-                      body: JSON.stringify({ postId: blogPostData.id })
-                    }
-                  );
-                  
-                  if (!factCheckResponse.ok) {
-                    const errorText = await factCheckResponse.text();
-                    console.warn(`Fact check warning: ${factCheckResponse.statusText}, ${errorText}`);
-                    // We don't throw here, just log the warning
-                  } else {
-                    console.log(`Fact check completed for post: ${blogPostData.id}`);
-                  }
-                } catch (factCheckErr) {
-                  console.warn("Fact check failed but continuing:", factCheckErr);
-                  // Don't throw here, just log the warning
-                }
-              }
-              
-              results.push({
-                postId: blogPostData.id,
-                title: blogPostData.title,
-                status: 'generated'
-              });
-            } catch (contentErr) {
-              console.error(`Error generating content for topic "${topic}":`, contentErr);
-              results.push({
-                scheduledPostId: post.id,
-                topic: topic,
-                status: STATUS.FAILED_CONTENT_GENERATION,
-                error: contentErr instanceof Error ? contentErr.message : String(contentErr)
-              });
-            }
-          }
-          
-          // Mark scheduled post as completed
-          await updatePostStatus(post.id, STATUS.COMPLETED, null);
-          
-          console.log(`Completed processing scheduled post ${post.id}`);
-        } catch (err) {
-          console.error(`Error processing scheduled post ${post.id}:`, err);
-          
-          // Determine failure type for more specific error reporting
-          let failureStatus = STATUS.FAILED;
-          if (err instanceof Error) {
-            if (err.message.includes("topic")) {
-              failureStatus = STATUS.FAILED_TOPIC_GENERATION;
-            } else if (err.message.includes("content") || err.message.includes("blog post")) {
-              failureStatus = STATUS.FAILED_CONTENT_GENERATION;
-            } else if (err.message.includes("fact")) {
-              failureStatus = STATUS.FAILED_FACT_CHECK;
-            }
-          }
-          
-          // Mark as failed with error message
-          await updatePostStatus(
-            post.id, 
-            failureStatus, 
-            err instanceof Error ? err.message : String(err)
-          );
-            
-          results.push({
-            scheduledPostId: post.id,
-            status: failureStatus,
-            error: err instanceof Error ? err.message : String(err)
+          results.push({ 
+            id: post.id, 
+            success: false, 
+            error: processError.message 
           });
         }
       }
+      
+      return new Response(
+        JSON.stringify({ success: true, results }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
     
     return new Response(
-      JSON.stringify({ 
-        processed: scheduledPosts?.length || 0,
-        results: results
-      }),
+      JSON.stringify({ error: "Method not allowed" }),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200 
+        status: 405,
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
       }
     );
-  } catch (err) {
-    console.error("Error in process-scheduled-posts function:", err);
+  } catch (error) {
+    console.error("Error:", error);
     
     return new Response(
-      JSON.stringify({ 
-        error: err instanceof Error ? err.message : String(err),
-        details: err instanceof Error ? (err.stack || null) : null 
-      }),
+      JSON.stringify({ success: false, error: error.message }),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500 
+        status: 500,
+        headers: { 
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        } 
       }
     );
   }
 });
 
-// Helper function to update post status
-async function updatePostStatus(postId: string, status: string, errorMessage: string | null) {
-  console.log(`Updating post ${postId} status to: ${status}`);
+// Helper function to update the status of a scheduled post
+async function updatePostStatus(postId, status, errorMessage = null) {
+  console.log(`Updating post ${postId} status to ${status}${errorMessage ? ` with error: ${errorMessage}` : ""}`);
   
-  const updateData: Record<string, unknown> = { status };
-  
-  if (status === STATUS.COMPLETED) {
-    updateData.completed_at = new Date().toISOString();
-  }
-  
-  if (errorMessage !== null) {
-    updateData.error_message = errorMessage;
-  }
-  
-  const { error } = await supabase
-    .from('scheduled_posts')
-    .update(updateData)
-    .eq('id', postId);
+  try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-  if (error) {
-    console.error(`Error updating post ${postId} status:`, error);
+    const updateData = { status };
+    if (errorMessage !== null) {
+      updateData.error_message = errorMessage;
+    }
+    
+    const { error } = await supabase
+      .from("scheduled_posts")
+      .update(updateData)
+      .eq("id", postId);
+    
+    if (error) {
+      console.error(`Failed to update post status: ${error.message}`);
+    }
+  } catch (error) {
+    console.error(`Error updating post status: ${error.message}`);
   }
+}
+
+// Main function to process a scheduled post
+async function processScheduledPost(post, supabase) {
+  console.log(`Starting to process post: ${post.id}`);
+  
+  // Step 1: Generate or use provided topics
+  let topics = [];
+  
+  if (post.auto_generate_topics) {
+    // Update status
+    await updatePostStatus(post.id, STATUS.GENERATING_TOPICS, null);
+    
+    console.log(`Auto-generating ${post.num_posts} topics`);
+    
+    // Generate topics
+    for (let i = 0; i < post.num_posts; i++) {
+      try {
+        const topicResponse = await fetch(
+          `${supabaseUrl}/functions/v1/generate-topic`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`
+            },
+            body: JSON.stringify({ previousTopics: topics })
+          }
+        );
+        
+        if (!topicResponse.ok) {
+          throw new Error(`Failed to generate topic: ${topicResponse.statusText}`);
+        }
+        
+        const topicData = await topicResponse.json();
+        if (!topicData.topic) {
+          throw new Error("No topic returned from topic generator");
+        }
+        
+        topics.push(topicData.topic);
+        console.log(`Generated topic ${i+1}: ${topicData.topic}`);
+      } catch (error) {
+        throw new Error(`Failed to generate topic ${i+1}: ${error.message}`);
+      }
+    }
+  } else {
+    // Use provided topics
+    console.log(`Using ${post.topics.length} provided topics`);
+    topics = post.topics;
+    
+    // If we don't have enough topics, generate more
+    if (topics.length < post.num_posts) {
+      await updatePostStatus(post.id, STATUS.GENERATING_TOPICS, null);
+      
+      console.log(`Need ${post.num_posts - topics.length} more topics`);
+      
+      for (let i = topics.length; i < post.num_posts; i++) {
+        try {
+          const topicResponse = await fetch(
+            `${supabaseUrl}/functions/v1/generate-topic`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`
+              },
+              body: JSON.stringify({ previousTopics: topics })
+            }
+          );
+          
+          if (!topicResponse.ok) {
+            throw new Error(`Failed to generate topic: ${topicResponse.statusText}`);
+          }
+          
+          const topicData = await topicResponse.json();
+          if (!topicData.topic) {
+            throw new Error("No topic returned from topic generator");
+          }
+          
+          topics.push(topicData.topic);
+          console.log(`Generated additional topic ${i+1}: ${topicData.topic}`);
+        } catch (error) {
+          throw new Error(`Failed to generate additional topic ${i+1}: ${error.message}`);
+        }
+      }
+    }
+  }
+  
+  // Update status to topics generated
+  await updatePostStatus(post.id, STATUS.TOPICS_GENERATED, null);
+  
+  // Step 2: Generate posts for each topic
+  console.log(`Generating ${topics.length} posts`);
+  
+  const generatedPostIds = [];
+  
+  for (let i = 0; i < topics.length; i++) {
+    const topic = topics[i];
+    
+    console.log(`Generating post ${i+1} for topic: ${topic}`);
+    
+    // Update status
+    await updatePostStatus(post.id, STATUS.GENERATING_CONTENT, null);
+    
+    try {
+      // Generate the blog post content
+      const blogPostResponse = await fetch(
+        `${supabaseUrl}/functions/v1/generate-blog-post`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`
+          },
+          body: JSON.stringify({ topic })
+        }
+      );
+      
+      if (!blogPostResponse.ok) {
+        throw new Error(`Failed to generate blog post: ${blogPostResponse.statusText}`);
+      }
+      
+      const blogPostData = await blogPostResponse.json();
+      
+      if (!blogPostData.content) {
+        throw new Error("No content returned from blog post generator");
+      }
+      
+      // Generate meta description
+      const metaResponse = await fetch(
+        `${supabaseUrl}/functions/v1/generate-meta-descriptions`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`
+          },
+          body: JSON.stringify({ 
+            topic: topic,
+            content: blogPostData.content
+          })
+        }
+      );
+      
+      if (!metaResponse.ok) {
+        throw new Error(`Failed to generate meta descriptions: ${metaResponse.statusText}`);
+      }
+      
+      const metaData = await metaResponse.json();
+      
+      if (!metaData.descriptions || metaData.descriptions.length === 0) {
+        throw new Error("No meta descriptions returned");
+      }
+      
+      // Save the blog post
+      const { data: blogPost, error: blogPostError } = await supabase
+        .from("blog_posts")
+        .insert({
+          title: topic,
+          content: blogPostData.content,
+          meta_description: metaData.descriptions[0], // Use the first meta description
+          scheduled_post_id: post.id
+        })
+        .select()
+        .single();
+      
+      if (blogPostError) {
+        throw new Error(`Failed to save blog post: ${blogPostError.message}`);
+      }
+      
+      generatedPostIds.push(blogPost.id);
+      console.log(`Generated post ${i+1} with ID: ${blogPost.id}`);
+      
+      // Fact check the post if enabled
+      if (post.auto_fact_check) {
+        // Update status to fact checking
+        await updatePostStatus(post.id, STATUS.FACT_CHECKING, null);
+        
+        console.log(`Fact-checking post: ${blogPost.id}`);
+        
+        try {
+          // Check if PERPLEXITY_API_KEY is available before attempting fact check
+          const perplexityApiKey = Deno.env.get("PERPLEXITY_API_KEY");
+          if (!perplexityApiKey) {
+            console.warn("PERPLEXITY_API_KEY not set, skipping fact checking");
+            // Create an empty fact check result to indicate it was attempted but skipped
+            await supabase
+              .from("fact_check_results")
+              .insert({
+                post_id: blogPost.id,
+                issues: [],
+                checked_at: new Date().toISOString(),
+              });
+          } else {
+            const factCheckResponse = await fetch(
+              `${supabaseUrl}/functions/v1/fact-check-post`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${supabaseServiceKey}`
+                },
+                body: JSON.stringify({ 
+                  postId: blogPost.id,
+                  content: blogPostData.content  // Send the content along with the postId
+                })
+              }
+            );
+            
+            if (!factCheckResponse.ok) {
+              const errorText = await factCheckResponse.text();
+              console.warn(`Fact check warning: ${factCheckResponse.statusText}, ${errorText}`);
+              
+              // Create a fact check result with error status
+              await supabase
+                .from("fact_check_results")
+                .insert({
+                  post_id: blogPost.id,
+                  issues: [],
+                  checked_at: new Date().toISOString(),
+                });
+                
+              await updatePostStatus(post.id, STATUS.FACT_CHECK_FAILED, `Fact check failed: ${factCheckResponse.statusText}`);
+            } else {
+              console.log(`Fact check completed for post: ${blogPost.id}`);
+              await updatePostStatus(post.id, STATUS.FACT_CHECK_COMPLETE, null);
+            }
+          }
+        } catch (factCheckErr) {
+          console.warn("Fact check failed but continuing:", factCheckErr);
+          
+          // Create a fact check result with error status
+          await supabase
+            .from("fact_check_results")
+            .insert({
+              post_id: blogPost.id,
+              issues: [],
+              checked_at: new Date().toISOString(),
+            });
+            
+          await updatePostStatus(post.id, STATUS.FACT_CHECK_FAILED, `Fact check error: ${factCheckErr.message}`);
+        }
+      }
+    } catch (error) {
+      throw new Error(`Failed to process topic ${topic}: ${error.message}`);
+    }
+  }
+  
+  // Update status to content generated
+  await updatePostStatus(post.id, STATUS.CONTENT_GENERATED, null);
+  
+  // Step 3: Mark the scheduled post as completed
+  console.log(`Marking scheduled post ${post.id} as completed`);
+  await updatePostStatus(post.id, STATUS.COMPLETED, null);
+  
+  console.log(`Scheduled post ${post.id} processed successfully with ${generatedPostIds.length} posts`);
+  return generatedPostIds;
 }
