@@ -12,109 +12,109 @@ export interface Database {
     Tables: {
       blog_posts: {
         Row: {
-          content: string
-          created_at: string
           id: string
-          meta_description: string | null
-          scheduled_post_id: string | null
-          title: string
+          created_at: string
           updated_at: string
+          title: string
+          content: string
+          featured_image: string | null
+          slug: string | null
+          meta_description: string | null
+          status: string
+          scheduled_post_id: string | null
+          fact_checked: boolean
         }
         Insert: {
-          content: string
-          created_at?: string
           id?: string
-          meta_description?: string | null
-          scheduled_post_id?: string | null
-          title: string
+          created_at?: string
           updated_at?: string
+          title: string
+          content: string
+          featured_image?: string | null
+          slug?: string | null
+          meta_description?: string | null
+          status?: string
+          scheduled_post_id?: string | null
+          fact_checked?: boolean
         }
         Update: {
-          content?: string
-          created_at?: string
           id?: string
-          meta_description?: string | null
-          scheduled_post_id?: string | null
-          title?: string
+          created_at?: string
           updated_at?: string
+          title?: string
+          content?: string
+          featured_image?: string | null
+          slug?: string | null
+          meta_description?: string | null
+          status?: string
+          scheduled_post_id?: string | null
+          fact_checked?: boolean
         }
       }
       fact_check_results: {
         Row: {
-          checked_at: string
-          created_at: string
           id: string
-          issues: Json
-          post_id: string | null
-          updated_at: string
+          created_at: string
+          post_id: string
+          issues: Json[] | null
+          status: string
+          reviewed: boolean
         }
         Insert: {
-          checked_at?: string
-          created_at?: string
           id?: string
-          issues?: Json
-          post_id?: string | null
-          updated_at?: string
+          created_at?: string
+          post_id: string
+          issues?: Json[] | null
+          status?: string
+          reviewed?: boolean
         }
         Update: {
-          checked_at?: string
-          created_at?: string
           id?: string
-          issues?: Json
-          post_id?: string | null
-          updated_at?: string
+          created_at?: string
+          post_id?: string
+          issues?: Json[] | null
+          status?: string
+          reviewed?: boolean
         }
       }
       scheduled_posts: {
         Row: {
-          auto_fact_check: boolean
-          auto_generate_topics: boolean
-          completed_at: string | null
-          created_at: string
-          error_message: string | null
           id: string
-          num_posts: number
+          created_at: string
           scheduled_for: string
+          num_posts: number
+          topics: string[] | null
+          auto_generate_topics: boolean
+          auto_fact_check: boolean
           status: string
-          topics: Json | null
+          completed_at: string | null
+          error_message: string | null
         }
         Insert: {
-          auto_fact_check?: boolean
-          auto_generate_topics?: boolean
-          completed_at?: string | null
-          created_at?: string
-          error_message?: string | null
           id?: string
-          num_posts?: number
+          created_at?: string
           scheduled_for: string
+          num_posts: number
+          topics?: string[] | null
+          auto_generate_topics?: boolean
+          auto_fact_check?: boolean
           status?: string
-          topics?: Json | null
+          completed_at?: string | null
+          error_message?: string | null
         }
         Update: {
-          auto_fact_check?: boolean
-          auto_generate_topics?: boolean
-          completed_at?: string | null
-          created_at?: string
-          error_message?: string | null
           id?: string
-          num_posts?: number
+          created_at?: string
           scheduled_for?: string
+          num_posts?: number
+          topics?: string[] | null
+          auto_generate_topics?: boolean
+          auto_fact_check?: boolean
           status?: string
-          topics?: Json | null
+          completed_at?: string | null
+          error_message?: string | null
         }
       }
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      [_ in never]: never
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
     }
   }
 }

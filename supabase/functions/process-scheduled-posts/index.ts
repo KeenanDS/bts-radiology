@@ -13,6 +13,10 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error("Missing environment variables SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
+
 const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey);
 
 serve(async (req) => {
@@ -40,6 +44,9 @@ serve(async (req) => {
     }
     
     console.log(`Found ${scheduledPosts?.length || 0} scheduled posts to process`);
+    
+    // Track processed posts
+    const results = [];
     
     // Process each post
     if (scheduledPosts && scheduledPosts.length > 0) {
@@ -159,6 +166,12 @@ serve(async (req) => {
                 }
               );
             }
+            
+            results.push({
+              postId: blogPostData.id,
+              title: blogPostData.title,
+              status: 'generated'
+            });
           }
           
           // Mark scheduled post as completed
@@ -182,13 +195,20 @@ serve(async (req) => {
               error_message: err instanceof Error ? err.message : String(err)
             })
             .eq('id', post.id);
+            
+          results.push({
+            scheduledPostId: post.id,
+            status: 'failed',
+            error: err instanceof Error ? err.message : String(err)
+          });
         }
       }
     }
     
     return new Response(
       JSON.stringify({ 
-        processed: scheduledPosts?.length || 0
+        processed: scheduledPosts?.length || 0,
+        results: results
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
