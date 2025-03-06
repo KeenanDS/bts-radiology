@@ -1,21 +1,23 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Slider } from "@/components/ui/slider";
-import { Pause, Play, SkipBack, SkipForward, Volume2 } from "lucide-react";
+import { Pause, Play, SkipBack, SkipForward, Volume2, Download } from "lucide-react";
 import { formatTime } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 interface AudioPlayerProps {
   audioUrl?: string;
   title?: string;
   subtitle?: string;
   coverImage?: string;
+  showDownload?: boolean;
 }
 
 const AudioPlayer = ({
   audioUrl = "",
   title = "Latest Episode Title",
   subtitle = "Discover Daily by Perplexity",
-  coverImage = "/lovable-uploads/680415d4-8d9a-4b0a-ab9f-afac4617df38.png"
+  coverImage = "/lovable-uploads/680415d4-8d9a-4b0a-ab9f-afac4617df38.png",
+  showDownload = false
 }: AudioPlayerProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -23,7 +25,6 @@ const AudioPlayer = ({
   const [volume, setVolume] = useState(80);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Set up audio element event listeners
   useEffect(() => {
     const audioElement = audioRef.current;
     if (!audioElement) return;
@@ -52,14 +53,12 @@ const AudioPlayer = ({
     };
   }, [audioRef]);
 
-  // Update volume when it changes
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = volume / 100;
     }
   }, [volume]);
 
-  // Play/pause control
   const togglePlayPause = () => {
     if (!audioRef.current) return;
     
@@ -71,7 +70,6 @@ const AudioPlayer = ({
     setIsPlaying(!isPlaying);
   };
 
-  // Handle seeking
   const handleSeek = (value: number[]) => {
     if (!audioRef.current) return;
     
@@ -80,12 +78,10 @@ const AudioPlayer = ({
     setCurrentTime(newTime);
   };
 
-  // Handle volume change
   const handleVolumeChange = (value: number[]) => {
     setVolume(value[0]);
   };
 
-  // Handle skip forward/backward
   const skipForward = () => {
     if (!audioRef.current) return;
     audioRef.current.currentTime += 15;
@@ -94,6 +90,18 @@ const AudioPlayer = ({
   const skipBackward = () => {
     if (!audioRef.current) return;
     audioRef.current.currentTime -= 15;
+  };
+
+  const handleDownload = () => {
+    if (!audioUrl) return;
+    
+    const link = document.createElement('a');
+    link.href = audioUrl;
+    const fileName = audioUrl.split('/').pop() || 'podcast-episode.mp3';
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -108,6 +116,17 @@ const AudioPlayer = ({
           <h3 className="text-white font-medium text-sm truncate">{title}</h3>
           <p className="text-gray-400 text-xs">{subtitle}</p>
         </div>
+        {showDownload && audioUrl && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+            onClick={handleDownload}
+            title="Download audio"
+          >
+            <Download size={18} />
+          </Button>
+        )}
       </div>
       
       <div className="mt-4 space-y-2">

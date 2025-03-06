@@ -1,10 +1,10 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { 
   CalendarIcon, 
@@ -14,13 +14,14 @@ import {
   Zap, 
   FileText, 
   Music, 
-  VolumeX 
+  History 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/admin/Sidebar";
 import { supabase } from "@/integrations/supabase/client";
 import AudioPlayer from "@/components/AudioPlayer";
+import PodcastHistory from "@/components/podcast/PodcastHistory";
 
 interface PodcastGenerationResult {
   success: boolean;
@@ -60,7 +61,6 @@ const PodcastPage = () => {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Function to handle scheduled podcast generation
   const handleGeneratePodcast = async () => {
     if (!date) {
       toast({
@@ -78,7 +78,6 @@ const PodcastPage = () => {
     setAudioUrl(null);
     
     try {
-      // Call the generate-podcast edge function
       const { data, error } = await supabase.functions.invoke<PodcastGenerationResult>(
         "generate-podcast",
         {
@@ -124,7 +123,6 @@ const PodcastPage = () => {
     }
   };
 
-  // Function to handle instant podcast generation
   const handleGenerateInstantPodcast = async () => {
     setIsGeneratingInstant(true);
     setResult(null);
@@ -133,7 +131,6 @@ const PodcastPage = () => {
     setAudioUrl(null);
     
     try {
-      // Create current date for the instant podcast
       const currentDate = new Date();
       
       toast({
@@ -141,7 +138,6 @@ const PodcastPage = () => {
         description: "Creating an instant podcast with the latest news...",
       });
 
-      // Call the generate-podcast edge function with current date
       const { data, error } = await supabase.functions.invoke<PodcastGenerationResult>(
         "generate-podcast",
         {
@@ -187,7 +183,6 @@ const PodcastPage = () => {
     }
   };
 
-  // Function to fetch full podcast script
   const fetchFullScript = async () => {
     if (!currentEpisodeId) return;
     
@@ -226,7 +221,6 @@ const PodcastPage = () => {
     }
   };
 
-  // Function to generate audio for the podcast
   const handleGenerateAudio = async () => {
     if (!currentEpisodeId) {
       toast({
@@ -245,7 +239,6 @@ const PodcastPage = () => {
         description: "Converting podcast script to audio. This may take a few minutes...",
       });
 
-      // Call the generate-podcast-audio edge function
       const { data, error } = await supabase.functions.invoke(
         "generate-podcast-audio",
         {
@@ -281,7 +274,6 @@ const PodcastPage = () => {
     }
   };
 
-  // Function to download audio file
   const handleDownloadAudio = () => {
     if (!audioUrl) return;
     
@@ -293,7 +285,6 @@ const PodcastPage = () => {
     document.body.removeChild(link);
   };
 
-  // Effect to auto-fetch full script when episode ID changes
   useEffect(() => {
     if (currentEpisodeId) {
       fetchFullScript();
@@ -313,236 +304,254 @@ const PodcastPage = () => {
 
           <Separator className="bg-[#2a2f4d] opacity-50" />
 
-          {audioUrl && (
-            <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
-              <CardHeader>
-                <CardTitle className="text-white text-xl">Generated Podcast</CardTitle>
-                <CardDescription className="text-gray-400">
-                  Listen to your generated podcast
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex justify-center">
-                <AudioPlayer 
-                  audioUrl={audioUrl} 
-                  title="Beyond the Scan"
-                  subtitle="Latest Radiology News"
-                />
-              </CardContent>
-            </Card>
-          )}
-
-          <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
-            <CardHeader>
-              <CardTitle className="text-white text-2xl">Generate a New Podcast Episode</CardTitle>
-              <CardDescription className="text-gray-400">
-                Set a date for your podcast and our AI will collect recent radiology news stories 
-                and generate a podcast script
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300">Episode Date</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full justify-start text-left font-normal border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]",
-                        !date && "text-gray-500"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {date ? format(date, "PPP") : <span>Select date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 border-[#2a2f4d] bg-[#1a1f3d]">
-                    <Calendar
-                      mode="single"
-                      selected={date}
-                      onSelect={setDate}
-                      initialFocus
-                      className="p-3 pointer-events-auto"
+          <Tabs defaultValue="generate" className="w-full">
+            <TabsList className="grid w-full max-w-md grid-cols-2 mb-6 bg-[#1a1f3d] text-gray-400">
+              <TabsTrigger value="generate" className="data-[state=active]:bg-[#2a2f5d] data-[state=active]:text-white">
+                <Mic className="mr-2 h-4 w-4" />
+                Generate Podcast
+              </TabsTrigger>
+              <TabsTrigger value="history" className="data-[state=active]:bg-[#2a2f5d] data-[state=active]:text-white">
+                <History className="mr-2 h-4 w-4" />
+                History
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="generate" className="space-y-8">
+              {audioUrl && (
+                <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
+                  <CardHeader>
+                    <CardTitle className="text-white text-xl">Generated Podcast</CardTitle>
+                    <CardDescription className="text-gray-400">
+                      Listen to your generated podcast
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex justify-center">
+                    <AudioPlayer 
+                      audioUrl={audioUrl} 
+                      title="Beyond the Scan"
+                      subtitle="Latest Radiology News"
                     />
-                  </PopoverContent>
-                </Popover>
-              </div>
+                  </CardContent>
+                </Card>
+              )}
 
-              <Button 
-                className="w-full bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white"
-                size="lg"
-                onClick={handleGeneratePodcast}
-                disabled={isLoading || isGeneratingInstant}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Generating Podcast...
-                  </>
-                ) : (
-                  <>
-                    <Mic className="mr-2 h-5 w-5" />
-                    Generate Scheduled Podcast
-                  </>
-                )}
-              </Button>
-              
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-[#2a2f4d]" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-[#111936] px-2 text-gray-400">or</span>
-                </div>
-              </div>
-              
-              <Button 
-                className="w-full bg-gradient-to-r from-[#3a3f7d] to-[#6366f1] hover:from-[#4a4f8d] hover:to-[#7376ff] text-white"
-                size="lg"
-                onClick={handleGenerateInstantPodcast}
-                disabled={isLoading || isGeneratingInstant}
-              >
-                {isGeneratingInstant ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Generating Instant Podcast...
-                  </>
-                ) : (
-                  <>
-                    <Zap className="mr-2 h-5 w-5" />
-                    Generate Instant Podcast
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {result && (
-            <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50 mt-8">
-              <CardHeader>
-                <CardTitle className="text-white text-xl">
-                  {result.success ? "Generation Results" : "Generation Failed"}
-                </CardTitle>
-                <CardDescription className="text-gray-400">
-                  {result.success 
-                    ? `Successfully collected ${result.newsStories?.length || 0} news stories and generated a podcast script.` 
-                    : `Error: ${result.error}`}
-                </CardDescription>
-              </CardHeader>
-              {result.success && result.newsStories && (
+              <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
+                <CardHeader>
+                  <CardTitle className="text-white text-2xl">Generate a New Podcast Episode</CardTitle>
+                  <CardDescription className="text-gray-400">
+                    Set a date for your podcast and our AI will collect recent radiology news stories 
+                    and generate a podcast script
+                  </CardDescription>
+                </CardHeader>
                 <CardContent className="space-y-6">
-                  <div>
-                    <h3 className="text-white text-lg font-medium mb-3">News Stories</h3>
-                    <div className="space-y-4">
-                      {result.newsStories.map((story, index) => (
-                        <div key={index} className="p-4 bg-[#1a1f3d] rounded-lg">
-                          <h4 className="text-white font-medium">{story.title}</h4>
-                          <p className="text-gray-300 mt-2 text-sm">{story.summary}</p>
-                          <div className="flex justify-between items-center mt-2 text-xs text-gray-400">
-                            <span>{story.source}</span>
-                            <span>{story.date}</span>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-300">Episode Date</label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className={cn(
+                            "w-full justify-start text-left font-normal border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]",
+                            !date && "text-gray-500"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {date ? format(date, "PPP") : <span>Select date</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 border-[#2a2f4d] bg-[#1a1f3d]">
+                        <Calendar
+                          mode="single"
+                          selected={date}
+                          onSelect={setDate}
+                          initialFocus
+                          className="p-3 pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <Button 
+                    className="w-full bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white"
+                    size="lg"
+                    onClick={handleGeneratePodcast}
+                    disabled={isLoading || isGeneratingInstant}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Generating Podcast...
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="mr-2 h-5 w-5" />
+                        Generate Scheduled Podcast
+                      </>
+                    )}
+                  </Button>
+                  
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-[#2a2f4d]" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-[#111936] px-2 text-gray-400">or</span>
+                    </div>
+                  </div>
+                  
+                  <Button 
+                    className="w-full bg-gradient-to-r from-[#3a3f7d] to-[#6366f1] hover:from-[#4a4f8d] hover:to-[#7376ff] text-white"
+                    size="lg"
+                    onClick={handleGenerateInstantPodcast}
+                    disabled={isLoading || isGeneratingInstant}
+                  >
+                    {isGeneratingInstant ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Generating Instant Podcast...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="mr-2 h-5 w-5" />
+                        Generate Instant Podcast
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {result && (
+                <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50 mt-8">
+                  <CardHeader>
+                    <CardTitle className="text-white text-xl">
+                      {result.success ? "Generation Results" : "Generation Failed"}
+                    </CardTitle>
+                    <CardDescription className="text-gray-400">
+                      {result.success 
+                        ? `Successfully collected ${result.newsStories?.length || 0} news stories and generated a podcast script.` 
+                        : `Error: ${result.error}`}
+                    </CardDescription>
+                  </CardHeader>
+                  {result.success && result.newsStories && (
+                    <CardContent className="space-y-6">
+                      <div>
+                        <h3 className="text-white text-lg font-medium mb-3">News Stories</h3>
+                        <div className="space-y-4">
+                          {result.newsStories.map((story, index) => (
+                            <div key={index} className="p-4 bg-[#1a1f3d] rounded-lg">
+                              <h4 className="text-white font-medium">{story.title}</h4>
+                              <p className="text-gray-300 mt-2 text-sm">{story.summary}</p>
+                              <div className="flex justify-between items-center mt-2 text-xs text-gray-400">
+                                <span>{story.source}</span>
+                                <span>{story.date}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {(result.scriptPreview || fullScript) && (
+                        <div>
+                          <div className="flex justify-between items-center mb-3">
+                            <h3 className="text-white text-lg font-medium">Podcast Script</h3>
+                            <div className="flex gap-2">
+                              {currentEpisodeId && !fullScript && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={fetchFullScript}
+                                  disabled={isFetchingFullScript}
+                                  className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
+                                >
+                                  {isFetchingFullScript ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <FileText className="mr-2 h-4 w-4" />
+                                      View Full Script
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="p-4 bg-[#1a1f3d] rounded-lg max-h-[600px] overflow-y-auto">
+                            {fullScript ? (
+                              <p className="text-gray-300 whitespace-pre-line">{fullScript}</p>
+                            ) : (
+                              <>
+                                <p className="text-gray-300 whitespace-pre-line">{result.scriptPreview}</p>
+                                <p className="text-gray-400 mt-2 text-sm italic">
+                                  ... (Click "View Full Script" to see the complete podcast content)
+                                </p>
+                              </>
+                            )}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {(result.scriptPreview || fullScript) && (
-                    <div>
-                      <div className="flex justify-between items-center mb-3">
-                        <h3 className="text-white text-lg font-medium">Podcast Script</h3>
-                        <div className="flex gap-2">
-                          {currentEpisodeId && !fullScript && (
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={fetchFullScript}
-                              disabled={isFetchingFullScript}
-                              className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
-                            >
-                              {isFetchingFullScript ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <>
-                                  <FileText className="mr-2 h-4 w-4" />
-                                  View Full Script
-                                </>
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                      <div className="p-4 bg-[#1a1f3d] rounded-lg max-h-[600px] overflow-y-auto">
-                        {fullScript ? (
-                          <p className="text-gray-300 whitespace-pre-line">{fullScript}</p>
-                        ) : (
-                          <>
-                            <p className="text-gray-300 whitespace-pre-line">{result.scriptPreview}</p>
-                            <p className="text-gray-400 mt-2 text-sm italic">
-                              ... (Click "View Full Script" to see the complete podcast content)
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="flex flex-wrap justify-end gap-3">
-                    <Button 
-                      variant="outline" 
-                      className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
-                      onClick={() => {
-                        // Download the script as a .txt file
-                        if (!fullScript) return;
+                      )}
+                      
+                      <div className="flex flex-wrap justify-end gap-3">
+                        <Button 
+                          variant="outline" 
+                          className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
+                          onClick={() => {
+                            if (!fullScript) return;
+                            
+                            const element = document.createElement("a");
+                            const file = new Blob([fullScript], {type: 'text/plain'});
+                            element.href = URL.createObjectURL(file);
+                            element.download = "podcast_script.txt";
+                            document.body.appendChild(element);
+                            element.click();
+                            document.body.removeChild(element);
+                          }}
+                          disabled={!fullScript}
+                        >
+                          <FileText className="mr-2 h-4 w-4" />
+                          Export Script
+                        </Button>
                         
-                        const element = document.createElement("a");
-                        const file = new Blob([fullScript], {type: 'text/plain'});
-                        element.href = URL.createObjectURL(file);
-                        element.download = "podcast_script.txt";
-                        document.body.appendChild(element);
-                        element.click();
-                        document.body.removeChild(element);
-                      }}
-                      disabled={!fullScript}
-                    >
-                      <FileText className="mr-2 h-4 w-4" />
-                      Export Script
-                    </Button>
-                    
-                    {currentEpisodeId && fullScript && !audioUrl && (
-                      <Button 
-                        className="bg-gradient-to-r from-[#3a3f7d] to-[#6366f1] hover:from-[#4a4f8d] hover:to-[#7376ff] text-white"
-                        onClick={handleGenerateAudio}
-                        disabled={isGeneratingAudio}
-                      >
-                        {isGeneratingAudio ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Generating Audio...
-                          </>
-                        ) : (
-                          <>
-                            <Music className="mr-2 h-4 w-4" />
-                            Generate Podcast Audio
-                          </>
+                        {currentEpisodeId && fullScript && !audioUrl && (
+                          <Button 
+                            className="bg-gradient-to-r from-[#3a3f7d] to-[#6366f1] hover:from-[#4a4f8d] hover:to-[#7376ff] text-white"
+                            onClick={handleGenerateAudio}
+                            disabled={isGeneratingAudio}
+                          >
+                            {isGeneratingAudio ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Generating Audio...
+                              </>
+                            ) : (
+                              <>
+                                <Music className="mr-2 h-4 w-4" />
+                                Generate Podcast Audio
+                              </>
+                            )}
+                          </Button>
                         )}
-                      </Button>
-                    )}
-                    
-                    {audioUrl && (
-                      <Button 
-                        variant="outline" 
-                        className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
-                        onClick={handleDownloadAudio}
-                      >
-                        <Download className="mr-2 h-4 w-4" />
-                        Download Audio
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
+                        
+                        {audioUrl && (
+                          <Button 
+                            variant="outline" 
+                            className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
+                            onClick={handleDownloadAudio}
+                          >
+                            <Download className="mr-2 h-4 w-4" />
+                            Download Audio
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
               )}
-            </Card>
-          )}
+            </TabsContent>
+            
+            <TabsContent value="history">
+              <PodcastHistory />
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </div>
