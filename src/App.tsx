@@ -10,6 +10,8 @@ import AdminDashboard from "./pages/AdminDashboard";
 import BlogPostsPage from "./pages/BlogPostsPage";
 import SchedulerPage from "./pages/SchedulerPage";
 import PodcastPage from "./pages/PodcastPage";
+import ProfilePage from "./pages/ProfilePage";
+import SettingsPage from "./pages/SettingsPage";
 
 const queryClient = new QueryClient();
 
