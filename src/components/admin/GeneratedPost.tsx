@@ -720,7 +720,7 @@ const GeneratedPost = ({
       return (
         <Badge variant="outline" className="bg-blue-900/20 text-blue-400 border-blue-800 flex items-center">
           <Loader2 className="h-3 w-3 animate-spin mr-1" />
-          Checking Facts
+          Checking...
         </Badge>
       );
     }
@@ -761,7 +761,7 @@ const GeneratedPost = ({
         return (
           <Badge variant="outline" className="bg-blue-900/20 text-blue-400 border-blue-800 flex items-center">
             <Loader2 className="h-3 w-3 animate-spin mr-1" />
-            Checking Facts
+            Checking...
           </Badge>
         );
       case "completed":
@@ -956,113 +956,154 @@ const GeneratedPost = ({
       {/* Main content area */}
       <div className="flex gap-4">
         {/* Content Area */}
-        <div className="flex-grow">
-          <Card className="w-full border-0 bg-[#121529] shadow-none">
-            <CardContent className="p-6">
-              <div className="prose-invert prose-p:text-gray-300 prose-p:text-base prose-headings:text-white prose-headings:font-semibold prose-strong:text-gray-200 prose-a:text-blue-400 max-w-none">
-                <div dangerouslySetInnerHTML={{ __html: currentContent }} />
+        <div className="flex-1">
+          <Card className="bg-[#1a1f3d] border-[#2a2f4d]">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-white text-lg">Content</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="prose prose-invert max-w-none">
+                <div className="whitespace-pre-wrap bg-[#111936] p-6 rounded-md text-gray-200 font-mono text-sm overflow-auto max-h-[650px]">
+                  {currentContent}
+                </div>
               </div>
             </CardContent>
           </Card>
         </div>
-        
-        {/* Sidebar - Fact Check Results */}
-        {showSidebar && (
-          <div className="w-[350px] flex-shrink-0">
-            {/* Meta Description Selection Form */}
-            {!isSaved && (
-              <Card className="mb-4 border-0 bg-[#121529] shadow-md">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold text-white">Meta Description</CardTitle>
-                  <CardDescription>Select a meta description for SEO</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {isGeneratingMeta ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
-                      <span className="ml-2 text-gray-400">Generating options...</span>
-                    </div>
-                  ) : metaDescriptions.length > 0 ? (
-                    <RadioGroup 
-                      defaultValue={selectedMetaDescription || metaDescriptions[0]} 
+
+        {/* Right Sidebar */}
+        <div className="w-[400px]">
+          {/* Meta Description Section - Only show if not saved */}
+          {!isSaved && (
+            <Card className="bg-[#1a1f3d] border-[#2a2f4d]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-white text-lg">Meta Description</CardTitle>
+                <CardDescription className="text-gray-400">
+                  How your post will appear in search results
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isGeneratingMeta ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                    <span className="ml-2 text-gray-400">Generating descriptions...</span>
+                  </div>
+                ) : metaDescriptions.length > 0 ? (
+                  <div className="space-y-4">
+                    <RadioGroup
+                      value={selectedMetaDescription}
                       onValueChange={setSelectedMetaDescription}
                       className="space-y-3"
                     >
                       {metaDescriptions.map((description, index) => (
-                        <div key={index} className="flex items-start space-x-2 rounded-md border border-[#232a4a] p-3 hover:border-[#323b6c]">
-                          <RadioGroupItem 
-                            value={description} 
-                            id={`meta-${index}`} 
-                            className="mt-1"
+                        <div key={index} className="flex items-start space-x-2 bg-[#111936] p-3 rounded-md hover:bg-[#2a2f5d] transition-colors">
+                          <RadioGroupItem
+                            value={description}
+                            id={`option-${index}`}
+                            className="border-gray-600 text-white mt-1"
                           />
-                          <Label htmlFor={`meta-${index}`} className="text-sm text-gray-300 font-normal leading-snug cursor-pointer">
+                          <Label
+                            htmlFor={`option-${index}`}
+                            className="text-sm text-gray-300 cursor-pointer leading-relaxed"
+                          >
                             {description}
                           </Label>
                         </div>
                       ))}
                     </RadioGroup>
-                  ) : (
-                    <div className="text-center py-4 text-gray-400">
-                      No meta descriptions available
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-            
-            {/* Fact Checking Results Card */}
-            {isSaved && (
-              <Card className="border-0 bg-[#121529] shadow-md">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-semibold text-white">Fact Check Results</CardTitle>
-                    {factCheckRun && factCheckIssues.length > 0 && (
-                      <Badge 
-                        variant="outline" 
-                        className="bg-blue-900/20 text-blue-400 border-blue-800"
-                      >
-                        {factCheckIssues.filter(i => !i.ignored).length} items
-                      </Badge>
+                    
+                    {selectedMetaDescription && (
+                      <div className="p-3 border border-[#2a2f4d] rounded-md mt-4">
+                        <h4 className="text-white text-sm font-medium mb-2">Search Result Preview</h4>
+                        <div className="bg-white rounded-md p-3 text-black">
+                          <div className="text-[#1a0dab] text-lg font-medium hover:underline cursor-pointer truncate">
+                            {topic}
+                          </div>
+                          <div className="text-[#006621] text-xs mb-1">
+                            www.beyondthescan.com
+                          </div>
+                          <div className="text-sm text-[#545454]">
+                            {selectedMetaDescription}
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
-                  <CardDescription>
-                    AI verification of facts and statements
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="px-2">
-                  <FactCheckResults 
-                    issues={factCheckIssues}
-                    onContentUpdated={handleContentUpdated}
-                    onIgnoreIssue={handleIgnoreIssue}
-                    loading={isFactChecking}
-                    onStatusChange={handleFactCheckStatusChange}
-                    factCheckStatus={factCheckStatus}
-                  />
-                  
-                  {!factCheckRun && !isFactChecking && (
-                    <div className="text-center py-6 px-3">
-                      <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-3 opacity-80" />
-                      <p className="text-gray-400 mb-2">This content has not been fact-checked yet.</p>
-                      <p className="text-sm text-gray-500">
-                        Click the "Fact Check" button above to verify the accuracy of this content.
-                      </p>
+                ) : (
+                  <p className="text-gray-500">No meta descriptions generated yet.</p>
+                )}
+              </CardContent>
+              {!isSaved && selectedMetaDescription && (
+                <CardFooter className="pt-0">
+                  <div className="w-full bg-yellow-900/30 text-yellow-400 text-xs p-2 rounded border border-yellow-900/50">
+                    <div className="flex items-center">
+                      <span className="mr-1">⚠️</span> Click 'Save Post' to proceed to fact checking
                     </div>
+                  </div>
+                </CardFooter>
+              )}
+            </Card>
+          )}
+
+          {/* Fact Check Section - Only show if saved */}
+          {isSaved && (
+            <Card className="bg-[#1a1f3d] border-[#2a2f4d]">
+              <CardHeader className="pb-3 border-b border-[#2a2f4d]">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle className="text-white text-xl mb-1">Fact Check Results</CardTitle>
+                    <CardDescription className="text-gray-400">
+                      {factCheckStatus === "not_checked" || factCheckStatus === "not_started"
+                        ? "Run a fact check to verify your content" 
+                        : factCheckStatus === "checking" || isFactChecking
+                        ? "Checking your content for factual issues..."
+                        : factCheckStatus === "error"
+                        ? "Error during fact checking"
+                        : factCheckIssues.length === 0
+                        ? "No issues found in your content"
+                        : activeIssueCount === 0
+                        ? "All issues have been resolved"
+                        : `${activeIssueCount} potential ${activeIssueCount === 1 ? 'issue' : 'issues'} found`}
+                    </CardDescription>
+                  </div>
+                  {factCheckStatus === "completed" && factCheckIssues.length > 0 && (
+                    <Badge 
+                      variant={activeIssueCount > 0 ? "default" : "success"}
+                      className={`${activeIssueCount > 0 ? 'bg-[#2a2f5d] hover:bg-[#3a3f7d]' : 'bg-emerald-600'} transition-colors px-3 py-1 text-sm`}
+                    >
+                      {activeIssueCount === 0 ? "All Clear" : `${activeIssueCount} Active`}
+                    </Badge>
                   )}
-                  
-                  {factCheckRun && factCheckIssues.length === 0 && !isFactChecking && (
-                    <div className="text-center py-6 px-3">
-                      <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-3 opacity-80" />
-                      <p className="text-gray-300 mb-2">All facts verified!</p>
-                      <p className="text-sm text-gray-500">
-                        No factual issues were found in this content.
-                      </p>
-                    </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <AnimatePresence mode="wait">
+                  {isFactChecking || factCheckStatus === "checking" ? (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="flex flex-col items-center justify-center py-8 space-y-3"
+                    >
+                      <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                      <p className="text-gray-400">Checking facts and accuracy...</p>
+                    </motion.div>
+                  ) : (
+                    <FactCheckResults 
+                      issues={factCheckIssues}
+                      isLoading={isFactChecking}
+                      postId={postId || undefined}
+                      content={currentContent}
+                      onContentUpdated={handleContentUpdated}
+                      onIgnoreIssue={handleIgnoreIssue}
+                      onFactCheckStatusChange={handleFactCheckStatusChange}
+                    />
                   )}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        )}
+                </AnimatePresence>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     </motion.div>
   );

@@ -1,6 +1,7 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, CheckCircle, RefreshCw, AlertTriangle, ClipboardCheck, Telescope } from "lucide-react";
+import { Loader2, CheckCircle, RefreshCw, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -429,98 +430,157 @@ const FactCheckResults = ({
     }
   };
 
-  return (
-    <>
-      {isLoading ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="space-y-6 py-4"
-        >
-          <div className="flex flex-col items-center justify-center py-8 space-y-6">
-            <div className="flex items-center justify-center w-16 h-16 rounded-full bg-blue-900/30 text-blue-400">
-              <Telescope className="h-8 w-8 animate-pulse" />
-            </div>
-            
-            <div className="text-center space-y-2 max-w-xs mx-auto">
-              <h3 className="text-lg font-medium text-blue-400">Analyzing Content</h3>
-              <p className="text-sm text-gray-400">
-                Our AI is verifying the accuracy of your content and checking for potential issues.
-              </p>
-            </div>
-            
-            <div className="flex items-center justify-center space-x-1.5 text-gray-500">
-              <span className="h-2 w-2 bg-blue-400 rounded-full animate-ping"></span>
-              <span className="h-2 w-2 bg-blue-400 rounded-full animate-ping [animation-delay:0.2s]"></span>
-              <span className="h-2 w-2 bg-blue-400 rounded-full animate-ping [animation-delay:0.4s]"></span>
-            </div>
-          </div>
-        </motion.div>
-      ) : issues.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-8 space-y-4 text-center">
-          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-green-900/30 text-green-400">
-            <ClipboardCheck className="h-6 w-6" />
-          </div>
-          <div>
-            <h3 className="text-lg font-medium text-green-400">Fact Check Complete</h3>
-            <p className="text-sm text-gray-400 mt-1">
-              No issues found. Your content is verified and ready to publish.
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {/* Active Issues */}
-          {issues.filter(issue => !issue.ignored).length > 0 && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium text-gray-400">Active Issues</h3>
-              {issues.map((issue, index) => {
-                if (issue.ignored) return null;
-                
-                return (
-                  <FactCheckIssueCard
-                    key={`issue-${index}`}
-                    issue={issue}
-                    index={index}
-                    isFixing={fixingIssues.has(index)}
-                    isFixed={fixedIssues.has(index)}
-                    isRetrying={retryingIssues.has(index)}
-                    onRevise={() => handleReviseIssue(index)}
-                    onRetry={() => handleRetryFactCheck(index)}
-                    onIgnore={() => onIgnoreIssue && onIgnoreIssue(index)}
-                  />
-                );
-              })}
-            </div>
+  // Display different states based on factCheckStatus
+  if (factCheckStatus === "not_checked" || factCheckStatus === "error") {
+    return (
+      <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
+        <CardContent className="flex flex-col items-center justify-center p-8 space-y-4">
+          {factCheckStatus === "error" ? (
+            <>
+              <AlertTriangle className="h-10 w-10 text-yellow-500" />
+              <span className="text-center text-gray-300">Fact checking encountered an error</span>
+            </>
+          ) : (
+            <>
+              <AlertTriangle className="h-10 w-10 text-yellow-500" />
+              <span className="text-center text-gray-300">Content has not been fact checked</span>
+            </>
           )}
           
-          {/* Ignored Issues */}
-          {issues.filter(issue => issue.ignored).length > 0 && (
-            <div className="space-y-3 mt-6">
-              <h3 className="text-sm font-medium text-gray-500">Ignored Issues</h3>
-              {issues.map((issue, index) => {
-                if (!issue.ignored) return null;
-                
-                return (
-                  <FactCheckIssueCard
-                    key={`ignored-${index}`}
-                    issue={issue}
-                    index={index}
-                    isFixing={fixingIssues.has(index)}
-                    isFixed={fixedIssues.has(index)}
-                    isRetrying={retryingIssues.has(index)}
-                    onRevise={() => handleReviseIssue(index)}
-                    onRetry={() => handleRetryFactCheck(index)}
-                    onIgnore={() => onIgnoreIssue && onIgnoreIssue(index)}
-                  />
-                );
-              })}
-            </div>
+          <Button
+            onClick={handleManualFactCheck}
+            disabled={isLoading}
+            className="mt-4 bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Checking Facts...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Run Fact Check
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (factCheckStatus === "checking" || isLoading) {
+    return (
+      <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
+        <CardContent className="flex flex-col items-center justify-center p-8 space-y-3">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+          <span className="text-gray-400 text-center">
+            AI is checking facts in your content<br/>
+            <span className="text-xs opacity-70">This may take a minute...</span>
+          </span>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (issues.length === 0) {
+    return (
+      <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
+        <CardContent className="flex flex-col items-center justify-center p-8 text-green-400 space-y-3">
+          <CheckCircle className="h-10 w-10" />
+          <span className="text-center">All facts verified!</span>
+          <p className="text-gray-400 text-sm text-center max-w-md">
+            The AI fact-checker has analyzed your content and found no factual issues.
+          </p>
+          
+          <Button
+            onClick={handleManualFactCheck}
+            variant="outline"
+            className="mt-4 border-[#2a2f5d] text-gray-300 hover:bg-[#2a2f5d] hover:text-white"
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Re-check Facts
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Filter out ignored issues
+  const activeIssues = issues.filter(issue => !issue.ignored);
+  // Count unfixed active issues - consider both fixedIssues state and resolved flag
+  const unfixedActiveIssues = activeIssues.filter(issue => 
+    !fixedIssues.has(issues.indexOf(issue)) && !issue.resolved
+  );
+  
+  // Determine if all issues have been addressed
+  const allIssuesAddressed = activeIssues.length > 0 && unfixedActiveIssues.length === 0;
+
+  return (
+    <div className="space-y-4">
+      {/* Issues list */}
+      <div className="space-y-2">
+        <AnimatePresence>
+          {activeIssues.length === 0 || allIssuesAddressed ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center justify-center py-6 text-center"
+            >
+              <CheckCircle className="h-12 w-12 text-emerald-500 mb-2" />
+              <p className="text-gray-300">All issues have been addressed!</p>
+              
+              <Button
+                onClick={handleManualFactCheck}
+                variant="outline"
+                className="mt-4 border-[#2a2f5d] text-gray-300 hover:bg-[#2a2f5d] hover:text-white"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Re-check Facts
+              </Button>
+            </motion.div>
+          ) : (
+            activeIssues.map((issue, index) => (
+              <FactCheckIssueCard
+                key={`issue-${index}`}
+                issue={issue}
+                index={issues.indexOf(issue)}
+                isRetrying={retryingIssues.has(issues.indexOf(issue))}
+                isFixing={fixingIssues.has(issues.indexOf(issue))}
+                isFixed={fixedIssues.has(issues.indexOf(issue)) || issue.resolved}
+                onRetry={() => handleRetryFactCheck(issues.indexOf(issue))}
+                onRevise={() => handleReviseIssue(issues.indexOf(issue))}
+                onIgnore={() => handleIgnoreIssue(issues.indexOf(issue))}
+              />
+            ))
           )}
+        </AnimatePresence>
+      </div>
+
+      {/* Revise All button - only show if there are unfixed active issues */}
+      {unfixedActiveIssues.length > 0 && (
+        <div className="flex justify-center mt-6 border-t border-[#2a2f4d] pt-6">
+          <Button
+            onClick={handleReviseAll}
+            disabled={isFixingAll}
+            className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white border-none px-6"
+          >
+            {isFixingAll ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Revising All Issues...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-5 w-5" />
+                Revise All Issues ({unfixedActiveIssues.length})
+              </>
+            )}
+          </Button>
         </div>
       )}
-    </>
+    </div>
   );
 };
 
