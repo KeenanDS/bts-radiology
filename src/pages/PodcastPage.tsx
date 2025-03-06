@@ -6,11 +6,21 @@ import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
-import { CalendarIcon, Download, Mic, Loader2, Zap, FileText } from "lucide-react";
+import { 
+  CalendarIcon, 
+  Download, 
+  Mic, 
+  Loader2, 
+  Zap, 
+  FileText, 
+  Music, 
+  VolumeX 
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/admin/Sidebar";
 import { supabase } from "@/integrations/supabase/client";
+import AudioPlayer from "@/components/AudioPlayer";
 
 interface PodcastGenerationResult {
   success: boolean;
@@ -35,16 +45,19 @@ interface PodcastEpisode {
     date: string;
   }>;
   status: string;
+  audio_url?: string;
 }
 
 const PodcastPage = () => {
   const [date, setDate] = useState<Date>();
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingInstant, setIsGeneratingInstant] = useState(false);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [result, setResult] = useState<PodcastGenerationResult | null>(null);
   const [isFetchingFullScript, setIsFetchingFullScript] = useState(false);
   const [fullScript, setFullScript] = useState<string | null>(null);
   const [currentEpisodeId, setCurrentEpisodeId] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Function to handle scheduled podcast generation
@@ -62,6 +75,7 @@ const PodcastPage = () => {
     setResult(null);
     setFullScript(null);
     setCurrentEpisodeId(null);
+    setAudioUrl(null);
     
     try {
       // Call the generate-podcast edge function
@@ -116,6 +130,7 @@ const PodcastPage = () => {
     setResult(null);
     setFullScript(null);
     setCurrentEpisodeId(null);
+    setAudioUrl(null);
     
     try {
       // Create current date for the instant podcast
@@ -181,7 +196,7 @@ const PodcastPage = () => {
     try {
       const { data, error } = await supabase
         .from("podcast_episodes")
-        .select("podcast_script")
+        .select("podcast_script, audio_url")
         .eq("id", currentEpisodeId)
         .single();
         
@@ -189,6 +204,9 @@ const PodcastPage = () => {
       
       if (data && data.podcast_script) {
         setFullScript(data.podcast_script);
+        if (data.audio_url) {
+          setAudioUrl(data.audio_url);
+        }
       } else {
         toast({
           title: "Warning",
@@ -206,6 +224,73 @@ const PodcastPage = () => {
     } finally {
       setIsFetchingFullScript(false);
     }
+  };
+
+  // Function to generate audio for the podcast
+  const handleGenerateAudio = async () => {
+    if (!currentEpisodeId) {
+      toast({
+        title: "Error",
+        description: "No episode selected for audio generation.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGeneratingAudio(true);
+    
+    try {
+      toast({
+        title: "Generating Audio",
+        description: "Converting podcast script to audio. This may take a few minutes...",
+      });
+
+      // Call the generate-podcast-audio edge function
+      const { data, error } = await supabase.functions.invoke(
+        "generate-podcast-audio",
+        {
+          body: { episodeId: currentEpisodeId },
+        }
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data || !data.success) {
+        throw new Error(data?.error || "Failed to generate podcast audio");
+      }
+
+      console.log("Audio generation result:", data);
+      
+      setAudioUrl(data.audioUrl);
+
+      toast({
+        title: "Success",
+        description: "Podcast audio generated successfully!",
+      });
+    } catch (error) {
+      console.error("Error generating podcast audio:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to generate podcast audio",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingAudio(false);
+    }
+  };
+
+  // Function to download audio file
+  const handleDownloadAudio = () => {
+    if (!audioUrl) return;
+    
+    const link = document.createElement('a');
+    link.href = audioUrl;
+    link.download = `podcast_episode_${currentEpisodeId}.mp3`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Effect to auto-fetch full script when episode ID changes
@@ -227,6 +312,24 @@ const PodcastPage = () => {
           </div>
 
           <Separator className="bg-[#2a2f4d] opacity-50" />
+
+          {audioUrl && (
+            <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
+              <CardHeader>
+                <CardTitle className="text-white text-xl">Generated Podcast</CardTitle>
+                <CardDescription className="text-gray-400">
+                  Listen to your generated podcast
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex justify-center">
+                <AudioPlayer 
+                  audioUrl={audioUrl} 
+                  title="Beyond the Scan"
+                  subtitle="Latest Radiology News"
+                />
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
             <CardHeader>
@@ -347,24 +450,26 @@ const PodcastPage = () => {
                     <div>
                       <div className="flex justify-between items-center mb-3">
                         <h3 className="text-white text-lg font-medium">Podcast Script</h3>
-                        {currentEpisodeId && !fullScript && (
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={fetchFullScript}
-                            disabled={isFetchingFullScript}
-                            className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
-                          >
-                            {isFetchingFullScript ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <>
-                                <FileText className="mr-2 h-4 w-4" />
-                                View Full Script
-                              </>
-                            )}
-                          </Button>
-                        )}
+                        <div className="flex gap-2">
+                          {currentEpisodeId && !fullScript && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={fetchFullScript}
+                              disabled={isFetchingFullScript}
+                              className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
+                            >
+                              {isFetchingFullScript ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <FileText className="mr-2 h-4 w-4" />
+                                  View Full Script
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </div>
                       </div>
                       <div className="p-4 bg-[#1a1f3d] rounded-lg max-h-[600px] overflow-y-auto">
                         {fullScript ? (
@@ -381,14 +486,58 @@ const PodcastPage = () => {
                     </div>
                   )}
                   
-                  <div className="flex justify-end">
+                  <div className="flex flex-wrap justify-end gap-3">
                     <Button 
                       variant="outline" 
                       className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
+                      onClick={() => {
+                        // Download the script as a .txt file
+                        if (!fullScript) return;
+                        
+                        const element = document.createElement("a");
+                        const file = new Blob([fullScript], {type: 'text/plain'});
+                        element.href = URL.createObjectURL(file);
+                        element.download = "podcast_script.txt";
+                        document.body.appendChild(element);
+                        element.click();
+                        document.body.removeChild(element);
+                      }}
+                      disabled={!fullScript}
                     >
-                      <Download className="mr-2 h-4 w-4" />
-                      Export Full Script
+                      <FileText className="mr-2 h-4 w-4" />
+                      Export Script
                     </Button>
+                    
+                    {currentEpisodeId && fullScript && !audioUrl && (
+                      <Button 
+                        className="bg-gradient-to-r from-[#3a3f7d] to-[#6366f1] hover:from-[#4a4f8d] hover:to-[#7376ff] text-white"
+                        onClick={handleGenerateAudio}
+                        disabled={isGeneratingAudio}
+                      >
+                        {isGeneratingAudio ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Generating Audio...
+                          </>
+                        ) : (
+                          <>
+                            <Music className="mr-2 h-4 w-4" />
+                            Generate Podcast Audio
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    
+                    {audioUrl && (
+                      <Button 
+                        variant="outline" 
+                        className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
+                        onClick={handleDownloadAudio}
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Download Audio
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               )}
