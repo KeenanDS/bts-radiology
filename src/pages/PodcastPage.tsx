@@ -6,7 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
-import { CalendarIcon, Download, Mic, Loader2 } from "lucide-react";
+import { CalendarIcon, Download, Mic, Loader2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/admin/Sidebar";
@@ -28,10 +28,11 @@ interface PodcastGenerationResult {
 const PodcastPage = () => {
   const [date, setDate] = useState<Date>();
   const [isLoading, setIsLoading] = useState(false);
+  const [isGeneratingInstant, setIsGeneratingInstant] = useState(false);
   const [result, setResult] = useState<PodcastGenerationResult | null>(null);
   const { toast } = useToast();
 
-  // Function to handle podcast generation
+  // Function to handle scheduled podcast generation
   const handleGeneratePodcast = async () => {
     if (!date) {
       toast({
@@ -88,6 +89,62 @@ const PodcastPage = () => {
     }
   };
 
+  // Function to handle instant podcast generation
+  const handleGenerateInstantPodcast = async () => {
+    setIsGeneratingInstant(true);
+    setResult(null);
+    
+    try {
+      // Create current date for the instant podcast
+      const currentDate = new Date();
+      
+      toast({
+        title: "Generating Podcast",
+        description: "Creating an instant podcast with the latest news...",
+      });
+
+      // Call the generate-podcast edge function with current date
+      const { data, error } = await supabase.functions.invoke<PodcastGenerationResult>(
+        "generate-podcast",
+        {
+          body: {
+            scheduledFor: currentDate.toISOString(),
+          },
+        }
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data || !data.success) {
+        throw new Error(data?.error || "Failed to generate instant podcast");
+      }
+
+      console.log("Instant podcast generation result:", data);
+      setResult(data);
+
+      toast({
+        title: "Success",
+        description: "Instant podcast generated successfully with latest news",
+      });
+    } catch (error) {
+      console.error("Error generating instant podcast:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to generate instant podcast",
+        variant: "destructive",
+      });
+      
+      setResult({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error occurred",
+      });
+    } finally {
+      setIsGeneratingInstant(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex bg-[#0a0b17]">
       <Sidebar />
@@ -141,7 +198,7 @@ const PodcastPage = () => {
                 className="w-full bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white"
                 size="lg"
                 onClick={handleGeneratePodcast}
-                disabled={isLoading}
+                disabled={isLoading || isGeneratingInstant}
               >
                 {isLoading ? (
                   <>
@@ -151,7 +208,35 @@ const PodcastPage = () => {
                 ) : (
                   <>
                     <Mic className="mr-2 h-5 w-5" />
-                    Generate Podcast
+                    Generate Scheduled Podcast
+                  </>
+                )}
+              </Button>
+              
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-[#2a2f4d]" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-[#111936] px-2 text-gray-400">or</span>
+                </div>
+              </div>
+              
+              <Button 
+                className="w-full bg-gradient-to-r from-[#3a3f7d] to-[#6366f1] hover:from-[#4a4f8d] hover:to-[#7376ff] text-white"
+                size="lg"
+                onClick={handleGenerateInstantPodcast}
+                disabled={isLoading || isGeneratingInstant}
+              >
+                {isGeneratingInstant ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Generating Instant Podcast...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="mr-2 h-5 w-5" />
+                    Generate Instant Podcast
                   </>
                 )}
               </Button>
