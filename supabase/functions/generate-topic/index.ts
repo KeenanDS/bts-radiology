@@ -54,7 +54,7 @@ serve(async (req) => {
 5. No descriptions or additional text
 
 Additional requirements for diverse title structures:
-- Vary the numbers used in listicles (use 3, 5, 7, 8, or other numbers, not just 10)
+- Vary the numbers used in listicles (use a variety of numbers 1-7)
 - Mix different title formats, such as:
   * How-to guides (e.g., "How to Advance Your Radiology Career in 2024")
   * Question-based titles (e.g., "What Makes a Successful Radiologist in Today's Healthcare?")
