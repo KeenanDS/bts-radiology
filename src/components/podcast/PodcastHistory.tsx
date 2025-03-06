@@ -14,6 +14,7 @@ export interface PodcastEpisode {
   audio_url: string | null;
   created_at: string;
   updated_at: string;
+  is_featured: boolean;
 }
 
 const PodcastHistory = () => {
@@ -22,33 +23,48 @@ const PodcastHistory = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    const fetchPodcastEpisodes = async () => {
-      try {
-        setIsLoading(true);
-        const { data, error } = await supabase
-          .from("podcast_episodes")
-          .select("*")
-          .order("scheduled_for", { ascending: false });
-
-        if (error) throw error;
-        
-        if (data) {
-          setEpisodes(data as PodcastEpisode[]);
-        }
-      } catch (error) {
-        console.error("Error fetching podcast episodes:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load podcast history",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchPodcastEpisodes();
-  }, [toast]);
+  }, []);
+
+  const fetchPodcastEpisodes = async () => {
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from("podcast_episodes")
+        .select("*")
+        .order("scheduled_for", { ascending: false });
+
+      if (error) throw error;
+      
+      if (data) {
+        setEpisodes(data as PodcastEpisode[]);
+      }
+    } catch (error) {
+      console.error("Error fetching podcast episodes:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load podcast history",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteEpisode = (id: string) => {
+    setEpisodes((prevEpisodes) => 
+      prevEpisodes.filter((episode) => episode.id !== id)
+    );
+  };
+
+  const handleSetFeatured = (id: string) => {
+    setEpisodes((prevEpisodes) => 
+      prevEpisodes.map((episode) => ({
+        ...episode,
+        is_featured: episode.id === id
+      }))
+    );
+  };
 
   if (isLoading) {
     return (
@@ -86,7 +102,12 @@ const PodcastHistory = () => {
       </CardHeader>
       <CardContent className="space-y-4">
         {episodes.map((episode) => (
-          <PodcastHistoryItem key={episode.id} episode={episode} />
+          <PodcastHistoryItem 
+            key={episode.id} 
+            episode={episode} 
+            onDelete={handleDeleteEpisode}
+            onSetFeatured={handleSetFeatured}
+          />
         ))}
       </CardContent>
     </Card>

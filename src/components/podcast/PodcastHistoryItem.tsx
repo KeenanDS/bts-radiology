@@ -9,19 +9,29 @@ import {
   Calendar, 
   Music,
   Check,
-  Clock
+  Clock,
+  Trash2,
+  Star
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PodcastEpisode } from "./PodcastHistory";
 import AudioPlayer from "@/components/AudioPlayer";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface PodcastHistoryItemProps {
   episode: PodcastEpisode;
+  onDelete: (id: string) => void;
+  onSetFeatured: (id: string) => void;
 }
 
-const PodcastHistoryItem = ({ episode }: PodcastHistoryItemProps) => {
+const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured }: PodcastHistoryItemProps) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSettingFeatured, setIsSettingFeatured] = useState(false);
+  const { toast } = useToast();
   
   const formatDate = (dateString: string) => {
     try {
@@ -57,6 +67,77 @@ const PodcastHistoryItem = ({ episode }: PodcastHistoryItemProps) => {
     }
   };
 
+  const handleDeleteEpisode = async () => {
+    try {
+      setIsDeleting(true);
+      
+      // Delete from database
+      const { error } = await supabase
+        .from("podcast_episodes")
+        .delete()
+        .eq("id", episode.id);
+        
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: "Episode deleted successfully",
+      });
+      
+      // Call parent onDelete callback to update UI
+      onDelete(episode.id);
+    } catch (error) {
+      console.error("Error deleting podcast episode:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete episode",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleSetFeatured = async () => {
+    if (episode.status !== "completed" || !episode.audio_url) {
+      toast({
+        title: "Cannot set as featured",
+        description: "Only completed episodes with audio can be featured",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsSettingFeatured(true);
+      
+      // Update database to set this episode as featured
+      const { error } = await supabase
+        .from("podcast_episodes")
+        .update({ is_featured: true })
+        .eq("id", episode.id);
+        
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: "Episode set as featured on homepage",
+      });
+      
+      // Call parent callback to update UI
+      onSetFeatured(episode.id);
+    } catch (error) {
+      console.error("Error setting episode as featured:", error);
+      toast({
+        title: "Error",
+        description: "Failed to set episode as featured",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSettingFeatured(false);
+    }
+  };
+
   const handleDownloadAudio = () => {
     if (!episode.audio_url) return;
     
@@ -84,6 +165,11 @@ const PodcastHistoryItem = ({ episode }: PodcastHistoryItemProps) => {
           <div className="flex flex-col">
             <div className="text-white font-medium">
               Episode {formatDate(episode.scheduled_for)}
+              {episode.is_featured && (
+                <span className="ml-2 text-yellow-400 text-xs font-medium">
+                  ★ Featured
+                </span>
+              )}
             </div>
             <div className="flex items-center text-gray-400 text-xs mt-1">
               <Calendar className="h-3 w-3 mr-1" />
@@ -103,6 +189,52 @@ const PodcastHistoryItem = ({ episode }: PodcastHistoryItemProps) => {
                 <Download className="h-4 w-4" />
               </Button>
             )}
+            
+            {episode.status === "completed" && episode.audio_url && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                className={`border-[#2a2f4d] ${episode.is_featured ? 'bg-yellow-900/30 text-yellow-400' : 'bg-[#1a1f3d] text-white'} hover:bg-[#2a2f5d]`}
+                onClick={handleSetFeatured}
+                disabled={isSettingFeatured}
+                title="Set as featured on homepage"
+              >
+                <Star className="h-4 w-4" />
+              </Button>
+            )}
+            
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-red-900/30 hover:text-red-400"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="bg-[#1a1f3d] border-[#2a2f4d] text-white">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                  <AlertDialogDescription className="text-gray-400">
+                    This will permanently delete this podcast episode and cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="bg-[#111936] text-white border-[#2a2f4d] hover:bg-[#2a2f5d] hover:text-white">
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={handleDeleteEpisode}
+                    className="bg-red-900/30 text-red-400 hover:bg-red-800/50"
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            
             <CollapsibleTrigger asChild>
               <Button 
                 variant="outline" 
@@ -134,6 +266,7 @@ const PodcastHistoryItem = ({ episode }: PodcastHistoryItemProps) => {
                 audioUrl={episode.audio_url} 
                 title={`Episode ${formatDate(episode.scheduled_for)}`}
                 subtitle="Beyond the Scan"
+                showDownload={true}
               />
             </div>
           )}
