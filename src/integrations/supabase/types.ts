@@ -85,6 +85,36 @@ export type Database = {
           },
         ]
       }
+      podcast_episodes: {
+        Row: {
+          created_at: string
+          id: string
+          news_stories: Json | null
+          podcast_script: string | null
+          scheduled_for: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          news_stories?: Json | null
+          podcast_script?: string | null
+          scheduled_for: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          news_stories?: Json | null
+          podcast_script?: string | null
+          scheduled_for?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       scheduled_posts: {
         Row: {
           auto_fact_check: boolean
