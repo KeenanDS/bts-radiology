@@ -38,17 +38,22 @@ const AdminDashboard = () => {
   const generateTopic = async () => {
     setIsGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-topic');
+      const { data, error } = await supabase.functions.invoke('generate-topic', {
+        // Add an empty body to avoid the "Unexpected end of JSON input" error
+        body: JSON.stringify({})
+      });
       
       if (error) {
         throw error;
       }
 
-      if (data?.topic) {
+      // Check for both the new 'topics' array and legacy 'topic' string format
+      if (data?.topics?.[0] || data?.topic) {
+        const newTopic = data?.topics?.[0] || data?.topic;
         // Update topic state and ensure the input field is updated
-        setTopic(data.topic);
+        setTopic(newTopic);
         if (topicInputRef.current) {
-          topicInputRef.current.value = data.topic;
+          topicInputRef.current.value = newTopic;
         }
 
         toast({

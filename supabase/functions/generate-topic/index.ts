@@ -1,13 +1,9 @@
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
 
 const cleanTitle = (title: string): string => {
   // Remove markdown symbols, quotes, and extra spaces
@@ -39,6 +35,7 @@ const validateTitle = (title: string): string => {
  * Response format:
  * {
  *   topics: string[] // Array of generated topics
+ *   topic: string // For backward compatibility (the first topic)
  *   error?: string // Error message if present
  * }
  */
@@ -50,16 +47,28 @@ serve(async (req) => {
   try {
     // Parse request body and get count parameter
     let count = 1;
-    try {
-      const body = await req.json();
-      count = body.count && Number.isInteger(body.count) && body.count > 0 ? body.count : 1;
-      
-      // Cap to a reasonable number to prevent abuse
-      count = Math.min(count, 10);
-      
-      console.log(`Requested to generate ${count} topics`);
-    } catch (e) {
-      console.warn("Could not parse request body, using default count of 1:", e);
+    let requestBody = null;
+    
+    // Only try to parse the body if the content length is greater than 0
+    const contentLength = req.headers.get('content-length');
+    if (contentLength && parseInt(contentLength) > 0) {
+      try {
+        requestBody = await req.json();
+        if (requestBody && requestBody.count && 
+            Number.isInteger(requestBody.count) && 
+            requestBody.count > 0) {
+          count = requestBody.count;
+        }
+        
+        // Cap to a reasonable number to prevent abuse
+        count = Math.min(count, 10);
+        
+        console.log(`Requested to generate ${count} topics with body:`, requestBody);
+      } catch (e) {
+        console.warn("Could not parse request body or it's empty, using default count of 1:", e);
+      }
+    } else {
+      console.log("Request has no body or empty body, using default count of 1");
     }
 
     // Check if OpenAI API key is configured
@@ -198,7 +207,11 @@ IMPORTANT: Format your response as a numbered list of ONLY the titles, nothing e
     }
 
     // Return the processed topics
-    const result = { topics: processedTopics };
+    // Include both 'topics' array and 'topic' string for backward compatibility
+    const result = { 
+      topics: processedTopics,
+      topic: processedTopics[0] // Include first topic as 'topic' for backward compatibility
+    };
     console.log('Sending response with format:', result);
 
     return new Response(JSON.stringify(result), {
@@ -208,7 +221,8 @@ IMPORTANT: Format your response as a numbered list of ONLY the titles, nothing e
     console.error('Error generating topics:', error);
     
     return new Response(JSON.stringify({ 
-      topics: ['Latest Trends in Radiology: Your Guide to Career Success'], 
+      topics: ['Latest Trends in Radiology: Your Guide to Career Success'],
+      topic: 'Latest Trends in Radiology: Your Guide to Career Success', // For backward compatibility
       error: error.message 
     }), {
       status: 500,
