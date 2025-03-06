@@ -1,12 +1,12 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
-import { CalendarIcon, Download, Mic, Loader2, Zap } from "lucide-react";
+import { CalendarIcon, Download, Mic, Loader2, Zap, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/admin/Sidebar";
@@ -25,11 +25,26 @@ interface PodcastGenerationResult {
   error?: string;
 }
 
+interface PodcastEpisode {
+  id: string;
+  podcast_script: string;
+  news_stories: Array<{
+    title: string;
+    summary: string;
+    source: string;
+    date: string;
+  }>;
+  status: string;
+}
+
 const PodcastPage = () => {
   const [date, setDate] = useState<Date>();
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingInstant, setIsGeneratingInstant] = useState(false);
   const [result, setResult] = useState<PodcastGenerationResult | null>(null);
+  const [isFetchingFullScript, setIsFetchingFullScript] = useState(false);
+  const [fullScript, setFullScript] = useState<string | null>(null);
+  const [currentEpisodeId, setCurrentEpisodeId] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Function to handle scheduled podcast generation
@@ -45,6 +60,8 @@ const PodcastPage = () => {
 
     setIsLoading(true);
     setResult(null);
+    setFullScript(null);
+    setCurrentEpisodeId(null);
     
     try {
       // Call the generate-podcast edge function
@@ -67,6 +84,10 @@ const PodcastPage = () => {
 
       console.log("Podcast generation result:", data);
       setResult(data);
+      
+      if (data.episodeId) {
+        setCurrentEpisodeId(data.episodeId);
+      }
 
       toast({
         title: "Success",
@@ -93,6 +114,8 @@ const PodcastPage = () => {
   const handleGenerateInstantPodcast = async () => {
     setIsGeneratingInstant(true);
     setResult(null);
+    setFullScript(null);
+    setCurrentEpisodeId(null);
     
     try {
       // Create current date for the instant podcast
@@ -123,6 +146,10 @@ const PodcastPage = () => {
 
       console.log("Instant podcast generation result:", data);
       setResult(data);
+      
+      if (data.episodeId) {
+        setCurrentEpisodeId(data.episodeId);
+      }
 
       toast({
         title: "Success",
@@ -144,6 +171,49 @@ const PodcastPage = () => {
       setIsGeneratingInstant(false);
     }
   };
+
+  // Function to fetch full podcast script
+  const fetchFullScript = async () => {
+    if (!currentEpisodeId) return;
+    
+    setIsFetchingFullScript(true);
+    
+    try {
+      const { data, error } = await supabase
+        .from("podcast_episodes")
+        .select("podcast_script")
+        .eq("id", currentEpisodeId)
+        .single();
+        
+      if (error) throw error;
+      
+      if (data && data.podcast_script) {
+        setFullScript(data.podcast_script);
+      } else {
+        toast({
+          title: "Warning",
+          description: "No full script available for this episode yet.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching full script:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch the full podcast script",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFetchingFullScript(false);
+    }
+  };
+
+  // Effect to auto-fetch full script when episode ID changes
+  useEffect(() => {
+    if (currentEpisodeId) {
+      fetchFullScript();
+    }
+  }, [currentEpisodeId]);
 
   return (
     <div className="min-h-screen flex bg-[#0a0b17]">
@@ -273,12 +343,40 @@ const PodcastPage = () => {
                     </div>
                   </div>
                   
-                  {result.scriptPreview && (
+                  {(result.scriptPreview || fullScript) && (
                     <div>
-                      <h3 className="text-white text-lg font-medium mb-3">Script Preview</h3>
-                      <div className="p-4 bg-[#1a1f3d] rounded-lg">
-                        <p className="text-gray-300 whitespace-pre-line">{result.scriptPreview}</p>
-                        <p className="text-gray-400 mt-2 text-sm italic">... (Full script saved in database)</p>
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-white text-lg font-medium">Podcast Script</h3>
+                        {currentEpisodeId && !fullScript && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={fetchFullScript}
+                            disabled={isFetchingFullScript}
+                            className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
+                          >
+                            {isFetchingFullScript ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <FileText className="mr-2 h-4 w-4" />
+                                View Full Script
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                      <div className="p-4 bg-[#1a1f3d] rounded-lg max-h-[600px] overflow-y-auto">
+                        {fullScript ? (
+                          <p className="text-gray-300 whitespace-pre-line">{fullScript}</p>
+                        ) : (
+                          <>
+                            <p className="text-gray-300 whitespace-pre-line">{result.scriptPreview}</p>
+                            <p className="text-gray-400 mt-2 text-sm italic">
+                              ... (Click "View Full Script" to see the complete podcast content)
+                            </p>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}

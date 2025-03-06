@@ -26,20 +26,37 @@ Return ONLY a JSON array of objects with these fields:
   }
 ]`;
 
-// System prompt for podcast script generation
+// Standard intro and outro templates
+const STANDARD_INTRO = `Welcome to "Beyond the Scan," your premier podcast for the latest developments in radiology and medical imaging. I'm Dr. Alex Morgan, your host, and today is {date}.
+
+In this episode, we'll be exploring some of the most recent and impactful news in the world of medical imaging that could shape the future of clinical practice.`;
+
+const STANDARD_OUTRO = `And that brings us to the end of today's episode of "Beyond the Scan." Remember, as imaging professionals, staying current with these developments is not just about technology—it's about providing the best possible care for our patients.
+
+If you found value in today's discussion, please consider subscribing to our podcast and sharing it with your colleagues. Join us next week when we'll dive into more fascinating developments in the world of radiology.
+
+Until then, I'm Dr. Alex Morgan, reminding you that what we do makes a difference in countless lives every day. Thank you for listening, and see you next time.`;
+
+// System prompt for podcast script generation with consistent structure
 const PODCAST_SCRIPT_SYSTEM_PROMPT = `You are a scriptwriter for "Beyond the Scan," a professional medical podcast about radiology and medical imaging.
 
-Create an engaging podcast script based on the provided news stories. The script should:
-1. Start with a warm, professional introduction to the "Beyond the Scan" podcast
-2. Mention the date of recording
-3. Cover each news story with clear transitions between topics
-4. Include appropriate professional commentary and implications for medical practice
-5. End with a friendly outro and teaser for the next episode
+Create an engaging podcast script based on the provided news stories, following this EXACT structure:
+
+1. Start with the EXACT standard intro (do not modify it):
+${STANDARD_INTRO}
+
+2. For each news story:
+   - Create a clear section header/transition
+   - Provide thorough coverage with clinical context
+   - Explain relevance and implications for medical professionals
+   - Add thoughtful commentary on how it might affect practice
+
+3. End with the EXACT standard outro (do not modify it):
+${STANDARD_OUTRO}
 
 The tone should be professional but conversational, suitable for medical professionals.
-The script should be formatted as if it's being read by a single host.
-
-Make the script sound natural and engaging. Aim for a 5-10 minute podcast (about a 1000-1500 word script).`;
+The script should be formatted as if it's being read by Dr. Alex Morgan as the host.
+Make the content between intro and outro sound natural and engaging. Aim for a 8-12 minute podcast (about 1500-2000 word script).`;
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -157,7 +174,7 @@ serve(async (req) => {
           success: true,
           episodeId,
           newsStories,
-          scriptPreview: podcastScript.substring(0, 300) + "...",
+          scriptPreview: podcastScript.substring(0, 500) + "...",
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -296,12 +313,15 @@ ${story.summary}
 Source: ${story.source}, Date: ${story.date}
 `).join("\n\n");
 
+    // Create intro with the proper date
+    const introWithDate = STANDARD_INTRO.replace("{date}", formattedDate);
+
     const userPrompt = `Create a script for the "Beyond the Scan" podcast episode recorded on ${formattedDate}. 
 Use these news stories as the content:
 
 ${newsStoriesText}
 
-Format the script as a natural-sounding podcast with an introduction, coverage of each story, and a conclusion.`;
+Format the script following our exact structure with the specified intro and outro. Be sure to provide insightful analysis of each story.`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
