@@ -1,7 +1,12 @@
+
 import AudioPlayer from "@/components/AudioPlayer";
 import { Link } from "react-router-dom";
+import { useFeaturedPodcast } from "@/hooks/useFeaturedPodcast";
+import { Loader2 } from "lucide-react";
 
 const Index = () => {
+  const { podcast, isLoading, error } = useFeaturedPodcast();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-neutral-900 via-neutral-800 to-neutral-900 flex flex-col items-center justify-center p-6">
       <div className="max-w-4xl w-full text-center space-y-20">
@@ -18,7 +23,22 @@ const Index = () => {
         </div>
 
         <div className="flex justify-center w-full px-4">
-          <AudioPlayer />
+          {isLoading ? (
+            <div className="flex justify-center items-center h-[220px] w-full">
+              <Loader2 className="h-8 w-8 animate-spin text-white/50" />
+            </div>
+          ) : error ? (
+            <div className="p-4 bg-red-900/20 text-red-400 rounded-lg">
+              {error}
+            </div>
+          ) : (
+            <AudioPlayer 
+              audioUrl={podcast?.audio_url || ""}
+              title={podcast?.title || "No episodes available"}
+              subtitle="Beyond the Scan Podcast by RadiologyJobs.com"
+              coverImage="/lovable-uploads/680415d4-8d9a-4b0a-ab9f-afac4617df38.png"
+            />
+          )}
         </div>
 
         <div className="max-w-2xl mx-auto text-center px-4">

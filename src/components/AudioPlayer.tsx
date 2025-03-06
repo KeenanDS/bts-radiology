@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Pause, Play, SkipBack, SkipForward, Volume2, Download } from "lucide-react";
@@ -16,7 +15,7 @@ interface AudioPlayerProps {
 const AudioPlayer = ({
   audioUrl = "",
   title = "Latest Episode Title",
-  subtitle = "Discover Daily by Perplexity",
+  subtitle = "Beyond the Scan Podcast by RadiologyJobs.com",
   coverImage = "/lovable-uploads/680415d4-8d9a-4b0a-ab9f-afac4617df38.png",
   showDownload = false
 }: AudioPlayerProps) => {
