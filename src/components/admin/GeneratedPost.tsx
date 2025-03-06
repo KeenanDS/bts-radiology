@@ -57,6 +57,18 @@ const POST_STATUS = {
   COMPLETED: "completed",
 };
 
+// Local Storage Keys
+const STORAGE_KEYS = {
+  CURRENT_POST: "beyondthescan_current_post",
+  POST_ID: "beyondthescan_post_id",
+  POST_STATUS: "beyondthescan_post_status",
+  FACT_CHECK_ISSUES: "beyondthescan_fact_check_issues",
+  FIXED_ISSUES: "beyondthescan_fixed_issues",
+  POST_TOPIC: "beyondthescan_post_topic",
+  SELECTED_META: "beyondthescan_selected_meta",
+  FACT_CHECK_STATUS: "beyondthescan_fact_check_status"
+};
+
 const GeneratedPost = ({ 
   topic, 
   generatedPost,
@@ -88,15 +100,100 @@ const GeneratedPost = ({
   const [autoFixProgress, setAutoFixProgress] = useState(0);
   const { toast } = useToast();
 
-  // Update currentContent when generatedPost changes
+  // Restore state from localStorage on component mount
   useEffect(() => {
-    setCurrentContent(generatedPost);
-    // Ensure sidebar is shown whenever we have content
-    if (generatedPost) {
+    const restoreStateFromStorage = () => {
+      try {
+        // Only restore if we have a saved post content
+        const savedContent = localStorage.getItem(STORAGE_KEYS.CURRENT_POST);
+        if (!savedContent) return;
+
+        // Restore all state
+        setCurrentContent(savedContent || generatedPost);
+        
+        const savedPostId = localStorage.getItem(STORAGE_KEYS.POST_ID);
+        if (savedPostId) setPostId(savedPostId);
+        
+        const savedStatus = localStorage.getItem(STORAGE_KEYS.POST_STATUS);
+        if (savedStatus) setPostStatus(savedStatus);
+        
+        const savedFactCheckStatus = localStorage.getItem(STORAGE_KEYS.FACT_CHECK_STATUS);
+        if (savedFactCheckStatus) setFactCheckStatus(savedFactCheckStatus);
+        
+        const savedIssuesJson = localStorage.getItem(STORAGE_KEYS.FACT_CHECK_ISSUES);
+        if (savedIssuesJson) {
+          const savedIssues = JSON.parse(savedIssuesJson);
+          if (Array.isArray(savedIssues)) setFactCheckIssues(savedIssues);
+        }
+        
+        const savedFixedIndicesJson = localStorage.getItem(STORAGE_KEYS.FIXED_ISSUES);
+        if (savedFixedIndicesJson) {
+          const indices = JSON.parse(savedFixedIndicesJson);
+          if (Array.isArray(indices)) setFixedIssueIndices(new Set(indices));
+        }
+        
+        // If we have a post ID, we've saved the post before
+        if (savedPostId) setIsSaved(true);
+        
+        // Set fact check as run if we have issues
+        if (savedIssuesJson) setFactCheckRun(true);
+        
+        console.log("State restored from localStorage");
+      } catch (error) {
+        console.error("Error restoring state from localStorage:", error);
+      }
+    };
+    
+    // Only restore if we don't already have content
+    if (!currentContent || currentContent === generatedPost) {
+      restoreStateFromStorage();
+    }
+  }, []);
+
+  // Update currentContent when generatedPost changes (only if no existing content)
+  useEffect(() => {
+    if (!currentContent && generatedPost) {
+      setCurrentContent(generatedPost);
+      // Ensure sidebar is shown whenever we have content
       console.log("Post generated, showing sidebar");
       setShowSidebar(true);
     }
   }, [generatedPost]);
+
+  // Save state to localStorage whenever important state changes
+  useEffect(() => {
+    if (currentContent) {
+      localStorage.setItem(STORAGE_KEYS.CURRENT_POST, currentContent);
+    }
+    
+    if (postId) {
+      localStorage.setItem(STORAGE_KEYS.POST_ID, postId);
+    }
+    
+    if (postStatus) {
+      localStorage.setItem(STORAGE_KEYS.POST_STATUS, postStatus);
+    }
+    
+    if (factCheckStatus) {
+      localStorage.setItem(STORAGE_KEYS.FACT_CHECK_STATUS, factCheckStatus);
+    }
+    
+    if (topic) {
+      localStorage.setItem(STORAGE_KEYS.POST_TOPIC, topic);
+    }
+    
+    if (selectedMetaDescription) {
+      localStorage.setItem(STORAGE_KEYS.SELECTED_META, selectedMetaDescription);
+    }
+    
+    if (factCheckIssues.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.FACT_CHECK_ISSUES, JSON.stringify(factCheckIssues));
+    }
+    
+    if (fixedIssueIndices.size > 0) {
+      localStorage.setItem(STORAGE_KEYS.FIXED_ISSUES, JSON.stringify([...fixedIssueIndices]));
+    }
+  }, [currentContent, postId, postStatus, factCheckStatus, topic, selectedMetaDescription, factCheckIssues, fixedIssueIndices]);
 
   // Log when meta descriptions are available
   useEffect(() => {
@@ -599,6 +696,19 @@ const GeneratedPost = ({
     }
   };
 
+  // Function to clear local storage when resetting form
+  const handleResetForm = () => {
+    // Clear local storage
+    Object.values(STORAGE_KEYS).forEach(key => {
+      localStorage.removeItem(key);
+    });
+    
+    // Call the parent resetForm function
+    if (resetForm) {
+      resetForm();
+    }
+  };
+
   // Count active (non-ignored, non-fixed) issues
   const activeIssueCount = factCheckIssues.filter(issue => 
     !issue.ignored && !issue.resolved && !fixedIssueIndices.has(factCheckIssues.indexOf(issue))
@@ -685,6 +795,24 @@ const GeneratedPost = ({
     }
   };
 
+  // Show warning if navigating away during fact checking
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (isFactChecking || isAutoFixing) {
+        const message = "Fact check in progress. Are you sure you want to leave?";
+        event.preventDefault();
+        event.returnValue = message;
+        return message;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isFactChecking, isAutoFixing]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -699,8 +827,9 @@ const GeneratedPost = ({
           {resetForm && (
             <Button 
               variant="ghost" 
-              onClick={resetForm}
+              onClick={handleResetForm}
               className="text-gray-400 hover:text-white hover:bg-[#1a1f3d] mr-4"
+              disabled={isFactChecking || isAutoFixing}
             >
               <ArrowLeft className="h-5 w-5 mr-2" />
               Back to New Post
