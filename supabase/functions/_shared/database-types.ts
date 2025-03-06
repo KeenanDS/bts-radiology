@@ -65,6 +65,41 @@ export interface Database {
           updated_at?: string
         }
       }
+      podcast_episodes: {
+        Row: {
+          created_at: string
+          id: string
+          news_stories: Json | null
+          podcast_script: string | null
+          scheduled_for: string
+          status: string
+          updated_at: string
+          audio_url: string | null
+          voice_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          news_stories?: Json | null
+          podcast_script?: string | null
+          scheduled_for: string
+          status?: string
+          updated_at?: string
+          audio_url?: string | null
+          voice_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          news_stories?: Json | null
+          podcast_script?: string | null
+          scheduled_for?: string
+          status?: string
+          updated_at?: string
+          audio_url?: string | null
+          voice_id?: string | null
+        }
+      }
       scheduled_posts: {
         Row: {
           auto_fact_check: boolean

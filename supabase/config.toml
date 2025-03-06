@@ -62,3 +62,7 @@ verify_jwt = false
 verify_jwt = false
 [functions.generate-topic]
 verify_jwt = false
+[functions.generate-podcast]
+verify_jwt = false
+[functions.generate-podcast-audio]
+verify_jwt = false
