@@ -87,7 +87,6 @@ export type Database = {
       }
       podcast_episodes: {
         Row: {
-          audio_url: string | null
           created_at: string
           id: string
           news_stories: Json | null
@@ -95,10 +94,8 @@ export type Database = {
           scheduled_for: string
           status: string
           updated_at: string
-          voice_id: string | null
         }
         Insert: {
-          audio_url?: string | null
           created_at?: string
           id?: string
           news_stories?: Json | null
@@ -106,10 +103,8 @@ export type Database = {
           scheduled_for: string
           status?: string
           updated_at?: string
-          voice_id?: string | null
         }
         Update: {
-          audio_url?: string | null
           created_at?: string
           id?: string
           news_stories?: Json | null
@@ -117,7 +112,6 @@ export type Database = {
           scheduled_for?: string
           status?: string
           updated_at?: string
-          voice_id?: string | null
         }
         Relationships: []
       }
