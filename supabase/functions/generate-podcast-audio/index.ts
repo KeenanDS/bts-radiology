@@ -49,30 +49,21 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Generating audio for podcast episode ID: ${episodeId}`);
+    console.log(`Processing audio generation for episode ID: ${episodeId}`);
     
-    // Update episode status to indicate audio generation is in progress
-    await supabase
+    // Get the podcast episode script
+    const { data: episodeData, error: episodeError } = await supabase
       .from("podcast_episodes")
-      .update({
-        status: "generating_audio",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", episodeId);
-
-    // Fetch the podcast script
-    const { data: episodeData, error: fetchError } = await supabase
-      .from("podcast_episodes")
-      .select("podcast_script, voice_id")
+      .select("podcast_script, status")
       .eq("id", episodeId)
       .single();
 
-    if (fetchError || !episodeData) {
-      console.error(`Error fetching podcast episode: ${fetchError?.message || "No data found"}`);
+    if (episodeError) {
+      console.error(`Error fetching podcast episode: ${episodeError.message}`);
       return new Response(
         JSON.stringify({
           success: false,
-          error: `Failed to fetch podcast episode: ${fetchError?.message || "No data found"}`,
+          error: `Failed to fetch podcast episode: ${episodeError.message}`,
         }),
         {
           status: 500,
@@ -81,17 +72,11 @@ serve(async (req) => {
       );
     }
 
-    const podcastScript = episodeData.podcast_script;
-    // Use provided voice ID or the one stored in the database
-    const finalVoiceId = voiceId || episodeData.voice_id || "onwK4e9ZLuTAKqWW03F9"; // Default to Daniel voice
-    
-    if (!podcastScript) {
-      console.error("Podcast script is empty");
-      await updateEpisodeWithError(episodeId, "Podcast script is empty");
+    if (!episodeData.podcast_script) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Podcast script is empty",
+          error: "Podcast script not found",
         }),
         {
           status: 400,
@@ -100,43 +85,79 @@ serve(async (req) => {
       );
     }
 
+    // Update episode status to generating audio
+    await supabase
+      .from("podcast_episodes")
+      .update({
+        status: "generating_audio",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", episodeId);
+
     try {
+      // Choose voice ID (default to Daniel if not specified)
+      const selectedVoiceId = voiceId || "onwK4e9ZLuTAKqWW03F9"; // Daniel voice
+      
+      console.log(`Generating audio with voice ID: ${selectedVoiceId}`);
+      
       // Generate audio using ElevenLabs API
-      console.log(`Generating audio with ElevenLabs using voice ID: ${finalVoiceId}`);
-      const audioBuffer = await generateAudio(podcastScript, finalVoiceId);
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${selectedVoiceId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "xi-api-key": elevenLabsApiKey,
+        },
+        body: JSON.stringify({
+          text: episodeData.podcast_script,
+          model_id: "eleven_turbo_v2", // Using Eleven Labs Flash v2.5 model for faster processing
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      // Get audio as arrayBuffer
+      const audioArrayBuffer = await response.arrayBuffer();
       
       // Generate a unique filename
       const filename = `podcast_${episodeId}_${Date.now()}.mp3`;
+      const filePath = `public/${filename}`;
       
-      // Upload audio to Supabase Storage
-      const { data: storageData, error: storageError } = await supabase
-        .storage
+      console.log(`Uploading audio file: ${filePath}`);
+      
+      // Upload the audio file to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from("podcast_audio")
-        .upload(filename, audioBuffer, {
+        .upload(filePath, audioArrayBuffer, {
           contentType: "audio/mpeg",
           cacheControl: "3600",
+          upsert: true,
         });
 
-      if (storageError) {
-        console.error(`Error uploading audio to storage: ${storageError.message}`);
-        await updateEpisodeWithError(episodeId, `Audio upload failed: ${storageError.message}`);
-        throw storageError;
+      if (uploadError) {
+        throw new Error(`Error uploading audio file: ${uploadError.message}`);
       }
-
-      // Get public URL for the audio file
-      const { data: publicUrlData } = await supabase
-        .storage
+      
+      // Get public URL for the uploaded file
+      const { data: publicUrlData } = await supabase.storage
         .from("podcast_audio")
-        .getPublicUrl(filename);
-
+        .getPublicUrl(filePath);
+      
       const audioUrl = publicUrlData.publicUrl;
-
-      // Update the episode with the audio URL
+      console.log(`Audio file uploaded successfully. Public URL: ${audioUrl}`);
+      
+      // Update the podcast episode with the audio URL
       await supabase
         .from("podcast_episodes")
         .update({
           audio_url: audioUrl,
-          voice_id: finalVoiceId,
+          voice_id: selectedVoiceId,
           status: "completed",
           updated_at: new Date().toISOString(),
         })
@@ -154,8 +175,27 @@ serve(async (req) => {
       );
     } catch (processingError) {
       console.error(`Error processing audio: ${processingError.message}`);
-      await updateEpisodeWithError(episodeId, processingError.message);
-      throw processingError;
+      
+      // Update the episode with error status
+      await supabase
+        .from("podcast_episodes")
+        .update({
+          status: "error",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", episodeId);
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: processingError.message,
+          episodeId,
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
   } catch (error) {
     console.error(`Error in generate-podcast-audio: ${error.message}`);
@@ -167,49 +207,4 @@ serve(async (req) => {
       }
     );
   }
-
-  // Helper function to update episode with error status
-  async function updateEpisodeWithError(episodeId: string, errorMessage: string) {
-    await supabase
-      .from("podcast_episodes")
-      .update({
-        status: "error",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", episodeId);
-  }
 });
-
-// Function to generate audio using ElevenLabs API
-async function generateAudio(text: string, voiceId: string): Promise<ArrayBuffer> {
-  try {
-    // Call ElevenLabs API to generate audio
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-      method: "POST",
-      headers: {
-        "Accept": "audio/mpeg",
-        "Content-Type": "application/json",
-        "xi-api-key": elevenLabsApiKey as string,
-      },
-      body: JSON.stringify({
-        text: text,
-        model_id: "eleven_turbo_v2_5", // Use ElevenLabs 11 Flash v2.5 model
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-
-    // Get audio as buffer
-    return await response.arrayBuffer();
-  } catch (error) {
-    console.error(`Error calling ElevenLabs API: ${error.message}`);
-    throw error;
-  }
-}
