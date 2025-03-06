@@ -14,7 +14,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // System prompt for Perplexity news search
 const NEWS_SEARCH_SYSTEM_PROMPT = `You are a specialized research assistant focused on medical imaging and radiology news. 
-Your task is to find 3-5 recent news stories (from the past week) about radiology, medical imaging, or related healthcare technology.
+Your task is to find 4 to 5 recent news stories (from the past week) about radiology, medical imaging, or related healthcare technology.
 
 Return ONLY a JSON array of objects with these fields:
 [
