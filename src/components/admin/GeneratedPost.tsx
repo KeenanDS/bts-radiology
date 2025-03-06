@@ -1,8 +1,8 @@
+<lov-code>
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Save, Loader2, CheckCircle, ChevronLeft, RefreshCw, ArrowLeft, AlertTriangle, Wand2 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -813,12 +813,25 @@ const GeneratedPost = ({
   }, [isFactChecking, isAutoFixing]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="w-full"
+    <div
+      className="w-full opacity-100 transition-opacity duration-300 ease-in-out"
+      style={{ 
+        animation: "fadeInUp 0.3s ease-out forwards",
+      }}
     >
+      <style jsx>{`
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
+      
       {/* Header with actions */}
       <div className="flex flex-col space-y-4 mb-6">
         {/* Back button and title */}
@@ -946,12 +959,4 @@ const GeneratedPost = ({
         <div className="mb-6 space-y-2">
           <div className="flex justify-between items-center mb-1">
             <span className="text-sm text-gray-400">Auto-fixing issues...</span>
-            <span className="text-sm text-gray-400">{autoFixProgress}%</span>
-          </div>
-          <Progress value={autoFixProgress} className="h-2" />
-        </div>
-      )}
-
-      {/* Main content area */}
-      <div className="flex gap-4">
-        {/* Content Area */}
+            <span className="text-sm text-gray-400">{auto
