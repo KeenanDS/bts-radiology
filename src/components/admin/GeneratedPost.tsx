@@ -1,8 +1,9 @@
-<lov-code>
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Save, Loader2, CheckCircle, ChevronLeft, RefreshCw, ArrowLeft, AlertTriangle, Wand2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -813,25 +814,12 @@ const GeneratedPost = ({
   }, [isFactChecking, isAutoFixing]);
 
   return (
-    <div
-      className="w-full opacity-100 transition-opacity duration-300 ease-in-out"
-      style={{ 
-        animation: "fadeInUp 0.3s ease-out forwards",
-      }}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="w-full"
     >
-      <style jsx>{`
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-      `}</style>
-      
       {/* Header with actions */}
       <div className="flex flex-col space-y-4 mb-6">
         {/* Back button and title */}
@@ -959,4 +947,125 @@ const GeneratedPost = ({
         <div className="mb-6 space-y-2">
           <div className="flex justify-between items-center mb-1">
             <span className="text-sm text-gray-400">Auto-fixing issues...</span>
-            <span className="text-sm text-gray-400">{auto
+            <span className="text-sm text-gray-400">{autoFixProgress}%</span>
+          </div>
+          <Progress value={autoFixProgress} className="h-2" />
+        </div>
+      )}
+
+      {/* Main content area */}
+      <div className="flex gap-4">
+        {/* Content Area */}
+        <div className="flex-grow">
+          <Card className="w-full border-0 bg-[#121529] shadow-none">
+            <CardContent className="p-6">
+              <div className="prose-invert prose-p:text-gray-300 prose-p:text-base prose-headings:text-white prose-headings:font-semibold prose-strong:text-gray-200 prose-a:text-blue-400 max-w-none">
+                <div dangerouslySetInnerHTML={{ __html: currentContent }} />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
+        {/* Sidebar - Fact Check Results */}
+        {showSidebar && (
+          <div className="w-[350px] flex-shrink-0">
+            {/* Meta Description Selection Form */}
+            {!isSaved && (
+              <Card className="mb-4 border-0 bg-[#121529] shadow-md">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg font-semibold text-white">Meta Description</CardTitle>
+                  <CardDescription>Select a meta description for SEO</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isGeneratingMeta ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+                      <span className="ml-2 text-gray-400">Generating options...</span>
+                    </div>
+                  ) : metaDescriptions.length > 0 ? (
+                    <RadioGroup 
+                      defaultValue={selectedMetaDescription || metaDescriptions[0]} 
+                      onValueChange={setSelectedMetaDescription}
+                      className="space-y-3"
+                    >
+                      {metaDescriptions.map((description, index) => (
+                        <div key={index} className="flex items-start space-x-2 rounded-md border border-[#232a4a] p-3 hover:border-[#323b6c]">
+                          <RadioGroupItem 
+                            value={description} 
+                            id={`meta-${index}`} 
+                            className="mt-1"
+                          />
+                          <Label htmlFor={`meta-${index}`} className="text-sm text-gray-300 font-normal leading-snug cursor-pointer">
+                            {description}
+                          </Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  ) : (
+                    <div className="text-center py-4 text-gray-400">
+                      No meta descriptions available
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+            
+            {/* Fact Checking Results Card */}
+            {isSaved && (
+              <Card className="border-0 bg-[#121529] shadow-md">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg font-semibold text-white">Fact Check Results</CardTitle>
+                    {factCheckRun && factCheckIssues.length > 0 && (
+                      <Badge 
+                        variant="outline" 
+                        className="bg-blue-900/20 text-blue-400 border-blue-800"
+                      >
+                        {factCheckIssues.filter(i => !i.ignored).length} items
+                      </Badge>
+                    )}
+                  </div>
+                  <CardDescription>
+                    AI verification of facts and statements
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="px-2">
+                  <FactCheckResults 
+                    issues={factCheckIssues}
+                    onContentUpdated={handleContentUpdated}
+                    onIgnoreIssue={handleIgnoreIssue}
+                    loading={isFactChecking}
+                    onStatusChange={handleFactCheckStatusChange}
+                    factCheckStatus={factCheckStatus}
+                  />
+                  
+                  {!factCheckRun && !isFactChecking && (
+                    <div className="text-center py-6 px-3">
+                      <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-3 opacity-80" />
+                      <p className="text-gray-400 mb-2">This content has not been fact-checked yet.</p>
+                      <p className="text-sm text-gray-500">
+                        Click the "Fact Check" button above to verify the accuracy of this content.
+                      </p>
+                    </div>
+                  )}
+                  
+                  {factCheckRun && factCheckIssues.length === 0 && !isFactChecking && (
+                    <div className="text-center py-6 px-3">
+                      <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-3 opacity-80" />
+                      <p className="text-gray-300 mb-2">All facts verified!</p>
+                      <p className="text-sm text-gray-500">
+                        No factual issues were found in this content.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+};
+
+export default GeneratedPost;
