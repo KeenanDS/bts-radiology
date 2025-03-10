@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,7 +50,6 @@ interface PodcastEpisode {
   }>;
   status: string;
   audio_url?: string;
-  error_message?: string;
 }
 
 const PodcastPage = () => {
@@ -144,7 +142,6 @@ const PodcastPage = () => {
         description: "Creating an instant podcast with the latest news...",
       });
 
-      // Increment retry count to force a new request
       setRetryCount(prev => prev + 1);
       
       const { data, error } = await supabase.functions.invoke<PodcastGenerationResult>(
@@ -152,7 +149,7 @@ const PodcastPage = () => {
         {
           body: {
             scheduledFor: currentDate.toISOString(),
-            retry: retryCount, // Pass retry count to ensure unique calls
+            retry: retryCount,
           },
         }
       );
@@ -179,7 +176,6 @@ const PodcastPage = () => {
     } catch (error) {
       console.error("Error generating instant podcast:", error);
       
-      // Provide more detailed error information
       const errorMessage = error instanceof Error ? error.message : "Failed to generate instant podcast";
       const detailedMessage = errorMessage.includes("Perplexity") 
         ? "News service is temporarily unavailable. Please try again in a few minutes." 
@@ -213,7 +209,7 @@ const PodcastPage = () => {
     try {
       const { data, error } = await supabase
         .from("podcast_episodes")
-        .select("podcast_script, audio_url, error_message")
+        .select("podcast_script, audio_url, status")
         .eq("id", currentEpisodeId)
         .single();
         
@@ -227,7 +223,7 @@ const PodcastPage = () => {
       } else {
         toast({
           title: "Warning",
-          description: data.error_message || "No full script available for this episode yet.",
+          description: data.status === "error" ? "Error generating podcast." : "No full script available for this episode yet.",
           variant: "destructive",
         });
       }
