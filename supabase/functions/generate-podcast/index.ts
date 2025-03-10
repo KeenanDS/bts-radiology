@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -60,6 +61,54 @@ Make the content between intro and outro sound natural and engaging. Aim for a 8
 
 // Explicitly define Bennet's voice ID
 const BENNET_VOICE_ID = "bmAn0TLASQN7ctGBMHgN";
+
+// Maximum retry attempts for API calls
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
+
+// Helper function to implement retries with exponential backoff
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = MAX_RETRIES): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`API request attempt ${attempt}/${maxRetries}`);
+      const response = await fetch(url, options);
+      
+      // Check if response is successful
+      if (response.ok) {
+        return response;
+      }
+      
+      // If not successful, get the error message
+      const errorText = await response.text();
+      lastError = new Error(`Request failed with status ${response.status}: ${errorText}`);
+      
+      // If this is a server error (5xx), we should retry
+      if (response.status >= 500) {
+        console.warn(`Server error (${response.status}), retrying in ${RETRY_DELAY_MS * attempt}ms...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt)); // Exponential backoff
+        continue;
+      }
+      
+      // For 4xx errors, don't retry as these are client errors
+      throw lastError;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      // If this is the last attempt, throw the error
+      if (attempt === maxRetries) {
+        throw lastError;
+      }
+      
+      console.warn(`Request failed (attempt ${attempt}/${maxRetries}): ${lastError.message}`);
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt)); // Exponential backoff
+    }
+  }
+  
+  // This should never happen due to the throw in the loop, but TypeScript needs it
+  throw lastError || new Error('Unknown error during fetch with retry');
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -195,6 +244,7 @@ serve(async (req) => {
         .update({
           status: "error",
           updated_at: new Date().toISOString(),
+          error_message: processingError.message, // Save error message
         })
         .eq("id", episodeId);
 
@@ -213,7 +263,11 @@ serve(async (req) => {
   } catch (error) {
     console.error(`Error in generate-podcast: ${error.message}`);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ 
+        success: false, 
+        error: error.message,
+        details: `Error occurred at ${new Date().toISOString()}`
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -225,82 +279,95 @@ serve(async (req) => {
 // Function to collect news stories using Perplexity API
 async function collectNewsStories() {
   try {
-    const response = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${perplexityApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.1-sonar-large-128k-online",
-        messages: [
-          {
-            role: "system",
-            content: NEWS_SEARCH_SYSTEM_PROMPT,
-          },
-          {
-            role: "user",
-            content: "Find 3-5 recent and notable news stories in radiology and medical imaging from the past week. Format the results as specified JSON.",
-          },
-        ],
-        temperature: 0.1,
-        max_tokens: 4000,
-        top_p: 0.9,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Perplexity API error: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-
-    const result = await response.json();
+    console.log("Preparing Perplexity API request for news stories");
     
+    // First try with the standard model
     try {
-      const completion = result.choices[0]?.message?.content;
-      if (completion) {
-        console.log(`Received response from Perplexity: ${completion.substring(0, 100)}...`);
-        
-        // Parse JSON array from the text response
-        let newsStories;
-        
-        // Check if response is already JSON
-        if (completion.trim().startsWith("[") && completion.trim().endsWith("]")) {
-          newsStories = JSON.parse(completion);
-        } else {
-          // Try to extract JSON array from the text response
-          const jsonMatch = completion.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            newsStories = JSON.parse(jsonMatch[0]);
-          } else {
-            console.warn("Could not parse JSON from Perplexity response");
-            throw new Error("Failed to extract news stories from the response");
-          }
-        }
-        
-        // Validate the structure
-        if (!Array.isArray(newsStories) || newsStories.length === 0) {
-          throw new Error("No news stories found or invalid format");
-        }
-        
-        // Make sure each story has the required fields
-        return newsStories.map(story => ({
-          title: story.title || "Untitled",
-          summary: story.summary || "No summary available",
-          source: story.source || "Unknown source",
-          date: story.date || new Date().toISOString().split("T")[0]
-        }));
-      }
-    } catch (parseError) {
-      console.error(`Error parsing Perplexity response: ${parseError.message}`);
-      throw new Error(`Failed to parse news stories: ${parseError.message}`);
+      return await tryFetchNewsStories("llama-3.1-sonar-large-128k-online");
+    } catch (error) {
+      console.warn(`Error with primary model: ${error.message}`);
+      console.log("Trying fallback model...");
+      
+      // If the first model fails, try with a fallback model
+      return await tryFetchNewsStories("llama-3.1-sonar-small-128k-online");
     }
-
-    throw new Error("No content received from Perplexity");
   } catch (error) {
-    console.error(`Error in collectNewsStories: ${error.message}`);
-    throw error;
+    console.error(`All attempts to collect news stories failed: ${error.message}`);
+    throw new Error(`Failed to collect news stories: ${error.message}`);
   }
+}
+
+// Helper function to try fetching news stories with a specific model
+async function tryFetchNewsStories(model: string) {
+  console.log(`Trying to fetch news stories with model: ${model}`);
+  
+  const response = await fetchWithRetry("https://api.perplexity.ai/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${perplexityApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: model,
+      messages: [
+        {
+          role: "system",
+          content: NEWS_SEARCH_SYSTEM_PROMPT,
+        },
+        {
+          role: "user",
+          content: "Find 3-5 recent and notable news stories in radiology and medical imaging from the past week. Format the results as specified JSON.",
+        },
+      ],
+      temperature: 0.1,
+      max_tokens: 4000,
+      top_p: 0.9,
+    }),
+  });
+
+  const result = await response.json();
+  
+  try {
+    const completion = result.choices[0]?.message?.content;
+    if (completion) {
+      console.log(`Received response from Perplexity: ${completion.substring(0, 100)}...`);
+      
+      // Parse JSON array from the text response
+      let newsStories;
+      
+      // Check if response is already JSON
+      if (completion.trim().startsWith("[") && completion.trim().endsWith("]")) {
+        newsStories = JSON.parse(completion);
+      } else {
+        // Try to extract JSON array from the text response
+        const jsonMatch = completion.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          newsStories = JSON.parse(jsonMatch[0]);
+        } else {
+          console.warn("Could not parse JSON from Perplexity response");
+          throw new Error("Failed to extract news stories from the response");
+        }
+      }
+      
+      // Validate the structure
+      if (!Array.isArray(newsStories) || newsStories.length === 0) {
+        throw new Error("No news stories found or invalid format");
+      }
+      
+      // Make sure each story has the required fields
+      return newsStories.map(story => ({
+        title: story.title || "Untitled",
+        summary: story.summary || "No summary available",
+        source: story.source || "Unknown source",
+        date: story.date || new Date().toISOString().split("T")[0]
+      }));
+    }
+  } catch (parseError) {
+    console.error(`Error parsing Perplexity response: ${parseError.message}`);
+    throw new Error(`Failed to parse news stories: ${parseError.message}`);
+  }
+
+  throw new Error("No content received from Perplexity");
 }
 
 // Function to generate podcast script using OpenAI API
@@ -329,7 +396,7 @@ ${newsStoriesText}
 
 Format the script following our exact structure with the specified intro and outro. Be sure to provide insightful analysis of each story.`;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetchWithRetry("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${openAIApiKey}`,
@@ -351,11 +418,6 @@ Format the script following our exact structure with the specified intro and out
         max_tokens: 4000,
       }),
     });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`OpenAI API error: ${errorData.error?.message || response.statusText}`);
-    }
 
     const data = await response.json();
     return data.choices[0]?.message?.content || "Failed to generate podcast script";

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +15,9 @@ import {
   Zap, 
   FileText, 
   Music, 
-  History 
+  History,
+  AlertCircle,
+  RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -34,6 +37,7 @@ interface PodcastGenerationResult {
   }>;
   scriptPreview?: string;
   error?: string;
+  details?: string;
 }
 
 interface PodcastEpisode {
@@ -47,6 +51,7 @@ interface PodcastEpisode {
   }>;
   status: string;
   audio_url?: string;
+  error_message?: string;
 }
 
 const PodcastPage = () => {
@@ -59,6 +64,7 @@ const PodcastPage = () => {
   const [fullScript, setFullScript] = useState<string | null>(null);
   const [currentEpisodeId, setCurrentEpisodeId] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const { toast } = useToast();
 
   const handleGeneratePodcast = async () => {
@@ -138,11 +144,15 @@ const PodcastPage = () => {
         description: "Creating an instant podcast with the latest news...",
       });
 
+      // Increment retry count to force a new request
+      setRetryCount(prev => prev + 1);
+      
       const { data, error } = await supabase.functions.invoke<PodcastGenerationResult>(
         "generate-podcast",
         {
           body: {
             scheduledFor: currentDate.toISOString(),
+            retry: retryCount, // Pass retry count to ensure unique calls
           },
         }
       );
@@ -168,19 +178,31 @@ const PodcastPage = () => {
       });
     } catch (error) {
       console.error("Error generating instant podcast:", error);
+      
+      // Provide more detailed error information
+      const errorMessage = error instanceof Error ? error.message : "Failed to generate instant podcast";
+      const detailedMessage = errorMessage.includes("Perplexity") 
+        ? "News service is temporarily unavailable. Please try again in a few minutes." 
+        : errorMessage;
+      
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to generate instant podcast",
+        description: detailedMessage,
         variant: "destructive",
       });
       
       setResult({
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error occurred",
+        error: errorMessage,
+        details: "The podcast generation service is experiencing issues. This might be due to temporary problems with our news data provider."
       });
     } finally {
       setIsGeneratingInstant(false);
     }
+  };
+
+  const handleRetryGenerateInstant = () => {
+    handleGenerateInstantPodcast();
   };
 
   const fetchFullScript = async () => {
@@ -191,7 +213,7 @@ const PodcastPage = () => {
     try {
       const { data, error } = await supabase
         .from("podcast_episodes")
-        .select("podcast_script, audio_url")
+        .select("podcast_script, audio_url, error_message")
         .eq("id", currentEpisodeId)
         .single();
         
@@ -205,7 +227,7 @@ const PodcastPage = () => {
       } else {
         toast({
           title: "Warning",
-          description: "No full script available for this episode yet.",
+          description: data.error_message || "No full script available for this episode yet.",
           variant: "destructive",
         });
       }
@@ -423,8 +445,15 @@ const PodcastPage = () => {
               {result && (
                 <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50 mt-8">
                   <CardHeader>
-                    <CardTitle className="text-white text-xl">
-                      {result.success ? "Generation Results" : "Generation Failed"}
+                    <CardTitle className="text-white text-xl flex items-center gap-2">
+                      {result.success ? (
+                        "Generation Results"
+                      ) : (
+                        <>
+                          <AlertCircle className="h-5 w-5 text-red-500" /> 
+                          Generation Failed
+                        </>
+                      )}
                     </CardTitle>
                     <CardDescription className="text-gray-400">
                       {result.success 
@@ -432,6 +461,28 @@ const PodcastPage = () => {
                         : `Error: ${result.error}`}
                     </CardDescription>
                   </CardHeader>
+                  
+                  {!result.success && (
+                    <CardContent className="space-y-6">
+                      <div className="p-4 bg-[#1a1f3d] rounded-lg border border-red-900/30">
+                        <h4 className="text-white font-medium mb-2">Error Details</h4>
+                        <p className="text-gray-300 mb-4">{result.details || "An error occurred during podcast generation. This might be due to temporary issues with our services."}</p>
+                        <Button 
+                          onClick={handleRetryGenerateInstant}
+                          className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white"
+                          disabled={isGeneratingInstant}
+                        >
+                          {isGeneratingInstant ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                          )}
+                          Retry Generation
+                        </Button>
+                      </div>
+                    </CardContent>
+                  )}
+                  
                   {result.success && result.newsStories && (
                     <CardContent className="space-y-6">
                       <div>
