@@ -85,7 +85,7 @@ serve(async (req) => {
        - Incorporate listicles, surprising facts, intriguing questions, or career tips.
        - Limit list numbers between 3 and 7.
        - Include timely references or trending topics when possible.
-       - Mix various compelling title formats including:
+       - EXAMPLES:Mix various compelling title formats including (but not limited to):
          * Intriguing questions (e.g., \"Is Your Radiology Career Future-Proof?\")
          * \"Secrets\" or \"things you didn't know\" (e.g., \"5 Surprising Facts About Radiology Jobs in 2025\")
          * Actionable \"How-to\" guides (e.g., \"How to Land Your Dream Radiology Job in 2025\")
@@ -99,7 +99,7 @@ serve(async (req) => {
        - Include years (e.g., 2025) or clear industry-specific keywords.
        - Use straightforward language for improved search engine visibility.
        - Prefer how-to guides, insight articles, or direct informative titles.
-       - Mix various SEO-friendly title formats including:
+       - EXAMPLES: Mix various SEO-friendly title formats including (but not limited to):
          * How-to guides (e.g., \"How to Find the Best Radiology Jobs in 2025\")
          * Career paths (e.g., \"Top Radiology Career Paths for Medical Imaging Professionals in 2025\")
          * Market outlooks (e.g., \"Radiology Job Market Outlook: Trends and Opportunities in 2025\")
@@ -109,6 +109,7 @@ serve(async (req) => {
          * Location-specific insights (e.g., \"Radiology Jobs by State: Highest-Paying Locations for Radiologists in 2025\")
     
     If more than one title is requested, provide a mix of both High Engagement and SEO-focused titles.
+    The titles should not follow the examples exactly, but should be similar. Use your creativity to generate unique titles that accomplish the goal of the prompt.
     
     IMPORTANT: Format your response as a numbered list of ONLY the titles, nothing else. Do not add any descriptions or explanations.`;
 
