@@ -14,6 +14,14 @@ import Sidebar from "@/components/admin/Sidebar";
 import PostForm from "@/components/admin/PostForm";
 import GeneratedPost from "@/components/admin/GeneratedPost";
 
+// Local Storage Keys
+const STORAGE_KEYS = {
+  CURRENT_POST: "beyondthescan_current_post",
+  POST_TOPIC: "beyondthescan_post_topic",
+  SELECTED_META: "beyondthescan_selected_meta",
+  META_DESCRIPTIONS: "beyondthescan_meta_descriptions"
+};
+
 const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<"create" | "manage">("create");
   const [topic, setTopic] = useState("");
@@ -28,6 +36,47 @@ const AdminDashboard = () => {
   const topicInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  // Check for existing post in localStorage on component mount
+  useEffect(() => {
+    const savedPost = localStorage.getItem(STORAGE_KEYS.CURRENT_POST);
+    const savedTopic = localStorage.getItem(STORAGE_KEYS.POST_TOPIC);
+    const savedMetaDescription = localStorage.getItem(STORAGE_KEYS.SELECTED_META);
+    const savedMetaDescriptions = localStorage.getItem(STORAGE_KEYS.META_DESCRIPTIONS);
+    
+    // If we have both a saved post and topic, restore the state
+    if (savedPost && savedTopic) {
+      setTopic(savedTopic);
+      setGeneratedPost(savedPost);
+      setShowPostForm(false);
+      
+      // If we have meta descriptions, restore those too
+      if (savedMetaDescriptions) {
+        try {
+          const parsedMetaDescriptions = JSON.parse(savedMetaDescriptions);
+          if (Array.isArray(parsedMetaDescriptions)) {
+            setMetaDescriptions(parsedMetaDescriptions);
+          }
+        } catch (error) {
+          console.error("Error parsing saved meta descriptions:", error);
+        }
+      }
+      
+      // If we have a selected meta description, restore that too
+      if (savedMetaDescription) {
+        setSelectedMetaDescription(savedMetaDescription);
+      }
+      
+      console.log("Restored post state from localStorage");
+    }
+  }, []);
+
+  // Save meta descriptions to localStorage whenever they change
+  useEffect(() => {
+    if (metaDescriptions.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.META_DESCRIPTIONS, JSON.stringify(metaDescriptions));
+    }
+  }, [metaDescriptions]);
+
   // Log when post generation completes
   useEffect(() => {
     if (generatedPost) {
@@ -38,17 +87,22 @@ const AdminDashboard = () => {
   const generateTopic = async () => {
     setIsGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-topic');
+      const { data, error } = await supabase.functions.invoke('generate-topic', {
+        // Add an empty body to avoid the "Unexpected end of JSON input" error
+        body: JSON.stringify({})
+      });
       
       if (error) {
         throw error;
       }
 
-      if (data?.topic) {
+      // Check for both the new 'topics' array and legacy 'topic' string format
+      if (data?.topics?.[0] || data?.topic) {
+        const newTopic = data?.topics?.[0] || data?.topic;
         // Update topic state and ensure the input field is updated
-        setTopic(data.topic);
+        setTopic(newTopic);
         if (topicInputRef.current) {
-          topicInputRef.current.value = data.topic;
+          topicInputRef.current.value = newTopic;
         }
 
         toast({
@@ -96,6 +150,9 @@ const AdminDashboard = () => {
         setSelectedMetaDescription(metaData.descriptions[0]);
       }
       
+      // Save to localStorage
+      localStorage.setItem(STORAGE_KEYS.META_DESCRIPTIONS, JSON.stringify(metaData.descriptions));
+      
       toast({
         title: "Success",
         description: "Meta descriptions generated successfully!",
@@ -142,6 +199,10 @@ const AdminDashboard = () => {
         setGeneratedPost(generationData.content);
         setShowPostForm(false);
         
+        // Save to localStorage
+        localStorage.setItem(STORAGE_KEYS.CURRENT_POST, generationData.content);
+        localStorage.setItem(STORAGE_KEYS.POST_TOPIC, topic);
+        
         // Generate meta descriptions after post is generated
         await generateMetaDescriptions();
         
@@ -165,6 +226,12 @@ const AdminDashboard = () => {
   };
 
   const resetForm = () => {
+    // Clear localStorage
+    Object.values(STORAGE_KEYS).forEach(key => {
+      localStorage.removeItem(key);
+    });
+    
+    // Reset state
     setShowPostForm(true);
     setGeneratedPost("");
     setTopic("");
@@ -196,7 +263,7 @@ const AdminDashboard = () => {
 
           <div className="mt-6">
             {currentView === "create" && (
-              <AnimatePresence>
+              <AnimatePresence mode="wait">
                 {showPostForm ? (
                   <PostForm
                     topic={topic}

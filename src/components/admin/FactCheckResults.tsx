@@ -1,11 +1,13 @@
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, CheckCircle, RefreshCw } from "lucide-react";
+import { Loader2, CheckCircle, RefreshCw, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import FactCheckIssueCard, { FactCheckIssue } from "./FactCheckIssueCard";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface FactCheckResultsProps {
   issues: FactCheckIssue[];
@@ -14,6 +16,7 @@ interface FactCheckResultsProps {
   onContentUpdated?: (newContent: string, fixedIndices?: number[]) => void;
   content?: string;
   onIgnoreIssue?: (index: number) => void;
+  onFactCheckStatusChange?: (isChecking: boolean) => void;
 }
 
 const FactCheckResults = ({ 
@@ -22,13 +25,44 @@ const FactCheckResults = ({
   postId, 
   onContentUpdated, 
   content,
-  onIgnoreIssue
+  onIgnoreIssue,
+  onFactCheckStatusChange
 }: FactCheckResultsProps) => {
   const [fixingIssues, setFixingIssues] = useState<Set<number>>(new Set());
   const [fixedIssues, setFixedIssues] = useState<Set<number>>(new Set());
   const [retryingIssues, setRetryingIssues] = useState<Set<number>>(new Set());
   const [isFixingAll, setIsFixingAll] = useState(false);
+  const [factCheckStatus, setFactCheckStatus] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // Fetch fact check status if we have a postId
+  useEffect(() => {
+    if (postId) {
+      const fetchFactCheckStatus = async () => {
+        try {
+          const { data, error } = await supabase
+            .from("fact_check_results")
+            .select("*")
+            .eq("post_id", postId)
+            .maybeSingle();
+            
+          if (error) {
+            console.error("Error fetching fact check status:", error);
+            setFactCheckStatus("error");
+          } else if (data) {
+            setFactCheckStatus("completed");
+          } else {
+            setFactCheckStatus("not_checked");
+          }
+        } catch (err) {
+          console.error("Error in fact check status fetch:", err);
+          setFactCheckStatus("error");
+        }
+      };
+      
+      fetchFactCheckStatus();
+    }
+  }, [postId]);
 
   const handleReviseIssue = async (index: number) => {
     if (!postId || !content) {
@@ -197,6 +231,62 @@ const FactCheckResults = ({
     }
   };
 
+  const handleManualFactCheck = async () => {
+    if (!postId || !content) {
+      toast({
+        title: "Error",
+        description: "Missing post ID or content for fact checking.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Notify parent component we're checking facts
+    if (onFactCheckStatusChange) {
+      onFactCheckStatusChange(true);
+    }
+    
+    setFactCheckStatus("checking");
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('fact-check-post', {
+        body: JSON.stringify({
+          postId,
+          content
+        })
+      });
+
+      if (error) throw error;
+
+      if (!data.success) {
+        throw new Error(data.error || "Fact check failed");
+      }
+
+      // Refresh the issues list
+      window.location.reload();
+      
+      toast({
+        title: "Success",
+        description: "Fact check completed successfully!",
+      });
+      
+      setFactCheckStatus("completed");
+    } catch (error) {
+      console.error('Error fact-checking post:', error);
+      toast({
+        title: "Error",
+        description: "Failed to complete fact check. Please try again.",
+        variant: "destructive",
+      });
+      setFactCheckStatus("error");
+    } finally {
+      // Notify parent component we're done checking facts
+      if (onFactCheckStatusChange) {
+        onFactCheckStatusChange(false);
+      }
+    }
+  };
+
   // Handle ignore issue internally if no external handler is provided
   const handleIgnoreIssue = (index: number) => {
     if (onIgnoreIssue) {
@@ -340,7 +430,46 @@ const FactCheckResults = ({
     }
   };
 
-  if (isLoading) {
+  // Display different states based on factCheckStatus
+  if (factCheckStatus === "not_checked" || factCheckStatus === "error") {
+    return (
+      <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
+        <CardContent className="flex flex-col items-center justify-center p-8 space-y-4">
+          {factCheckStatus === "error" ? (
+            <>
+              <AlertTriangle className="h-10 w-10 text-yellow-500" />
+              <span className="text-center text-gray-300">Fact checking encountered an error</span>
+            </>
+          ) : (
+            <>
+              <AlertTriangle className="h-10 w-10 text-yellow-500" />
+              <span className="text-center text-gray-300">Content has not been fact checked</span>
+            </>
+          )}
+          
+          <Button
+            onClick={handleManualFactCheck}
+            disabled={isLoading}
+            className="mt-4 bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Checking Facts...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Run Fact Check
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (factCheckStatus === "checking" || isLoading) {
     return (
       <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
         <CardContent className="flex flex-col items-center justify-center p-8 space-y-3">
@@ -363,6 +492,15 @@ const FactCheckResults = ({
           <p className="text-gray-400 text-sm text-center max-w-md">
             The AI fact-checker has analyzed your content and found no factual issues.
           </p>
+          
+          <Button
+            onClick={handleManualFactCheck}
+            variant="outline"
+            className="mt-4 border-[#2a2f5d] text-gray-300 hover:bg-[#2a2f5d] hover:text-white"
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Re-check Facts
+          </Button>
         </CardContent>
       </Card>
     );
@@ -392,6 +530,15 @@ const FactCheckResults = ({
             >
               <CheckCircle className="h-12 w-12 text-emerald-500 mb-2" />
               <p className="text-gray-300">All issues have been addressed!</p>
+              
+              <Button
+                onClick={handleManualFactCheck}
+                variant="outline"
+                className="mt-4 border-[#2a2f5d] text-gray-300 hover:bg-[#2a2f5d] hover:text-white"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Re-check Facts
+              </Button>
             </motion.div>
           ) : (
             activeIssues.map((issue, index) => (
