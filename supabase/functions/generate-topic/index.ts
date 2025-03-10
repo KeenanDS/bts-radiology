@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -79,26 +78,39 @@ serve(async (req) => {
     console.log(`Generating ${count} topics with OpenAI...`);
     
     // Adjust the system prompt based on the number of topics requested
-    const systemPrompt = `You are a specialized content strategist for the radiology and medical imaging industry. Your task is to generate ${count} blog post title${count > 1 ? 's' : ''}. Each title should be:
+    const systemPrompt = `You are a specialized content strategist for the radiology and medical imaging industry. Your task is to generate ${count} blog post title${count > 1 ? 's' : ''}. Your task is to first decide between generating High Engagement or SEO-focused titles. Before generating titles, choose one of two distinct paths:
 
-1. Attention-grabbing with compelling words
-2. SEO-optimized for radiology job searches
-3. Relevant to current trends in radiology
-4. Include a number or year when appropriate
-5. No descriptions or additional text
-
-Additional requirements for diverse title structures:
-- Vary the numbers used in listicles (use a variety of numbers 1-7)
-- Mix different title formats, such as:
-  * How-to guides (e.g., "How to Advance Your Radiology Career in 2024")
-  * Question-based titles (e.g., "What Makes a Successful Radiologist in Today's Healthcare?")
-  * Insight articles (e.g., "The Future of AI in Radiology: Key Insights for Job Seekers")
-  * Career guidance (e.g., "5 Essential Skills Modern Radiologists Need to Master")
-  * Industry trends (e.g., "7 Emerging Specializations in Diagnostic Imaging")
-  * Professional development (e.g., "3 Career-Changing Certifications for Radiology Professionals")
-- Occasionally use different title structures that don't include numbers
-
-IMPORTANT: Format your response as a numbered list of ONLY the titles, nothing else. Do not add any descriptions or explanations.`;
+    1. **High Engagement (Buzzfeed-style)**:
+       - Use emotional, intriguing, or provocative language to encourage clicks.
+       - Incorporate listicles, surprising facts, intriguing questions, or career tips.
+       - Limit list numbers between 3 and 7.
+       - Include timely references or trending topics when possible.
+       - Mix various compelling title formats including:
+         * Intriguing questions (e.g., \"Is Your Radiology Career Future-Proof?\")
+         * \"Secrets\" or \"things you didn't know\" (e.g., \"5 Surprising Facts About Radiology Jobs in 2025\")
+         * Actionable \"How-to\" guides (e.g., \"How to Land Your Dream Radiology Job in 2025\")
+         * Timely insights (e.g., \"4 Ways AI is Revolutionizing Radiology Careers This Year\")
+         * Career hacks or quick tips (e.g., \"6 Quick Tips to Stand Out in Radiology Interviews\")
+         * Bold statements or controversial viewpoints (e.g., \"Why Traditional Radiology Jobs Might Disappear by 2030\")
+         * Current trends or emerging specializations (e.g., \"3 Hot Radiology Specialties Everyone's Talking About in 2025\")
+    
+    2. **SEO Focused (Search Engine Optimization)**:
+       - Emphasize clear, relevant keywords like \"radiology,\" \"medical imaging,\" and related terms.
+       - Include years (e.g., 2025) or clear industry-specific keywords.
+       - Use straightforward language for improved search engine visibility.
+       - Prefer how-to guides, insight articles, or direct informative titles.
+       - Mix various SEO-friendly title formats including:
+         * How-to guides (e.g., \"How to Find the Best Radiology Jobs in 2025\")
+         * Career paths (e.g., \"Top Radiology Career Paths for Medical Imaging Professionals in 2025\")
+         * Market outlooks (e.g., \"Radiology Job Market Outlook: Trends and Opportunities in 2025\")
+         * Salary guides (e.g., \"The Ultimate Guide to Radiology Salaries and Job Benefits in 2025\")
+         * Certification and qualifications (e.g., \"Radiology Certification: Requirements and Career Advantages in 2025\")
+         * Step-by-step application processes (e.g., \"Step-by-Step Guide to Applying for Radiology Jobs Online in 2025\")
+         * Location-specific insights (e.g., \"Radiology Jobs by State: Highest-Paying Locations for Radiologists in 2025\")
+    
+    If more than one title is requested, provide a mix of both High Engagement and SEO-focused titles.
+    
+    IMPORTANT: Format your response as a numbered list of ONLY the titles, nothing else. Do not add any descriptions or explanations.`;
 
     // Make the OpenAI API request with retry logic
     let response = null;
