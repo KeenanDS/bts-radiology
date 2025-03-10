@@ -96,7 +96,7 @@ serve(async (req) => {
 
     // Generate audio using ElevenLabs API
     console.log("Generating audio with ElevenLabs...");
-    const voiceId = episode.voice_id || "onwK4e9ZLuTAKqWW03F9"; // Default to Daniel voice if not specified
+    const voiceId = episode.voice_id || "bmAn0TLASQN7ctGBMHgN"; // Default to Daniel voice if not specified
     
     const elevenLabsResponse = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
