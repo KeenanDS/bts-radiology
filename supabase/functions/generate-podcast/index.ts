@@ -27,15 +27,15 @@ Return ONLY a JSON array of objects with these fields:
 ]`;
 
 // Standard intro and outro templates
-const STANDARD_INTRO = `Welcome to "Beyond the Scan," your premier podcast for the latest developments in radiology and medical imaging. I'm Dr. Alex Morgan, your host, and today is {date}.
+const STANDARD_INTRO = `Welcome to "Beyond the Scan," the first AI podcast dedicated to the latest developments in radiology and medical imaging. I'm Jackie, your host, and today is {date}.
 
-In this episode, we'll be exploring some of the most recent and impactful news in the world of medical imaging that could shape the future of clinical practice.`;
+Beyond the Scan is proudly sponsored by RadiologyJobs.com, connecting imaging professionals with career opportunities nationwide.
 
-const STANDARD_OUTRO = `And that brings us to the end of today's episode of "Beyond the Scan." Remember, as imaging professionals, staying current with these developments is not just about technology—it's about providing the best possible care for our patients.
+In today's episode, we'll explore some of the most significant recent developments in medical imaging that are shaping the future of clinical practice. As your guide through the evolving landscape of radiology technology and research, I'm excited to break down what these advances mean for the field and the patients you serve.`;
 
-If you found value in today's discussion, please consider subscribing to our podcast and sharing it with your colleagues. Join us next week when we'll dive into more fascinating developments in the world of radiology.
+const STANDARD_OUTRO = `As we wrap up today's episode of "Beyond the Scan," I want to thank you for joining me on this exploration of the latest advancements in our field. If you found today's discussion valuable, please subscribe to our podcast and share it with colleagues who might benefit. You can also visit our website at beyondthescan.com for additional resources related to today's topics.
 
-Until then, I'm Dr. Alex Morgan, reminding you that what we do makes a difference in countless lives every day. Thank you for listening, and see you next time.`;
+ I'll be back next week with another episode of "Beyond the Scan." Until then, this is Jackie, reminding you that what we do makes a difference in countless lives every day.`;
 
 // System prompt for podcast script generation with consistent structure
 const PODCAST_SCRIPT_SYSTEM_PROMPT = `You are a scriptwriter for "Beyond the Scan," a professional medical podcast about radiology and medical imaging.
@@ -50,12 +50,13 @@ ${STANDARD_INTRO}
    - Provide thorough coverage with clinical context
    - Explain relevance and implications for medical professionals
    - Add thoughtful commentary on how it might affect practice
+   - Add a natural transition to the next news story
 
 3. End with the EXACT standard outro (do not modify it):
 ${STANDARD_OUTRO}
 
 The tone should be professional but conversational, suitable for medical professionals.
-The script should be formatted as if it's being read by Dr. Alex Morgan as the host.
+The script should be formatted as if it's being read by Dr.Jackie as the host.
 Make the content between intro and outro sound natural and engaging. Aim for a 8-12 minute podcast (about 1500-2000 word script).`;
 
 serve(async (req) => {
