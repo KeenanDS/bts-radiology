@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -10,6 +9,9 @@ const elevenLabsApiKey = Deno.env.get("ELEVENLABS_API_KEY");
 
 // Initialize Supabase client
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// Bennet's voice ID as a fallback
+const DEFAULT_VOICE_ID = "bmAn0TLASQN7ctGBMHgN"; // Bennet's voice ID
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -96,7 +98,10 @@ serve(async (req) => {
 
     // Generate audio using ElevenLabs API
     console.log("Generating audio with ElevenLabs...");
-    const voiceId = episode.voice_id || "bmAn0TLASQN7ctGBMHgN"; // Default to Daniel voice if not specified
+    
+    // Use the voice_id from the episode record, or fall back to Bennet's voice if not specified
+    const voiceId = episode.voice_id || DEFAULT_VOICE_ID;
+    console.log(`Using voice ID: ${voiceId}`);
     
     const elevenLabsResponse = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,

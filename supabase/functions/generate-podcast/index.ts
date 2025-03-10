@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -59,6 +58,9 @@ The tone should be professional but conversational, suitable for medical profess
 The script should be formatted as if it's being read by Dr.Jackie as the host.
 Make the content between intro and outro sound natural and engaging. Aim for a 8-12 minute podcast (about 1500-2000 word script).`;
 
+// Explicitly define Bennet's voice ID
+const BENNET_VOICE_ID = "bmAn0TLASQN7ctGBMHgN";
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -113,12 +115,13 @@ serve(async (req) => {
 
     console.log(`Processing podcast request scheduled for ${scheduledFor}`);
     
-    // Create a podcast episode record
+    // Create a podcast episode record with Bennet's voice ID explicitly set
     const { data: episodeData, error: episodeError } = await supabase
       .from("podcast_episodes")
       .insert({
         scheduled_for: scheduledFor,
         status: "processing",
+        voice_id: BENNET_VOICE_ID, // Explicitly set Bennet's voice ID
       })
       .select()
       .single();
@@ -152,6 +155,7 @@ serve(async (req) => {
         .update({
           news_stories: newsStories,
           status: "generating_script",
+          voice_id: BENNET_VOICE_ID, // Ensure voice_id is maintained during updates
         })
         .eq("id", episodeId);
 
@@ -167,6 +171,7 @@ serve(async (req) => {
           podcast_script: podcastScript,
           status: "completed",
           updated_at: new Date().toISOString(),
+          voice_id: BENNET_VOICE_ID, // Ensure voice_id is maintained during updates
         })
         .eq("id", episodeId);
 
