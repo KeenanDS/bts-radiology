@@ -279,95 +279,80 @@ serve(async (req) => {
 // Function to collect news stories using Perplexity API
 async function collectNewsStories() {
   try {
-    console.log("Preparing Perplexity API request for news stories");
+    console.log("Preparing Perplexity API request for news stories using sonar-reasoning-pro model");
     
-    // First try with the standard model
+    // Use the sonar-reasoning-pro model for better reasoning and structured output
+    const response = await fetchWithRetry("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${perplexityApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "sonar-reasoning-pro",
+        messages: [
+          {
+            role: "system",
+            content: NEWS_SEARCH_SYSTEM_PROMPT,
+          },
+          {
+            role: "user",
+            content: "Find 3-5 recent and notable news stories in radiology and medical imaging from the past week. Format the results as specified JSON.",
+          },
+        ],
+        temperature: 0.1,
+        max_tokens: 4000,
+        top_p: 0.9,
+      }),
+    });
+
+    const result = await response.json();
+    
     try {
-      return await tryFetchNewsStories("llama-3.1-sonar-large-128k-online");
-    } catch (error) {
-      console.warn(`Error with primary model: ${error.message}`);
-      console.log("Trying fallback model...");
-      
-      // If the first model fails, try with a fallback model
-      return await tryFetchNewsStories("llama-3.1-sonar-small-128k-online");
+      const completion = result.choices[0]?.message?.content;
+      if (completion) {
+        console.log(`Received response from Perplexity: ${completion.substring(0, 100)}...`);
+        
+        // Parse JSON array from the text response
+        let newsStories;
+        
+        // Check if response is already JSON
+        if (completion.trim().startsWith("[") && completion.trim().endsWith("]")) {
+          newsStories = JSON.parse(completion);
+        } else {
+          // Try to extract JSON array from the text response
+          const jsonMatch = completion.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            newsStories = JSON.parse(jsonMatch[0]);
+          } else {
+            console.warn("Could not parse JSON from Perplexity response");
+            throw new Error("Failed to extract news stories from the response");
+          }
+        }
+        
+        // Validate the structure
+        if (!Array.isArray(newsStories) || newsStories.length === 0) {
+          throw new Error("No news stories found or invalid format");
+        }
+        
+        // Make sure each story has the required fields
+        return newsStories.map(story => ({
+          title: story.title || "Untitled",
+          summary: story.summary || "No summary available",
+          source: story.source || "Unknown source",
+          date: story.date || new Date().toISOString().split("T")[0]
+        }));
+      }
+    } catch (parseError) {
+      console.error(`Error parsing Perplexity response: ${parseError.message}`);
+      throw new Error(`Failed to parse news stories: ${parseError.message}`);
     }
+
+    throw new Error("No content received from Perplexity");
   } catch (error) {
-    console.error(`All attempts to collect news stories failed: ${error.message}`);
+    console.error(`Error collecting news stories: ${error.message}`);
     throw new Error(`Failed to collect news stories: ${error.message}`);
   }
-}
-
-// Helper function to try fetching news stories with a specific model
-async function tryFetchNewsStories(model: string) {
-  console.log(`Trying to fetch news stories with model: ${model}`);
-  
-  const response = await fetchWithRetry("https://api.perplexity.ai/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${perplexityApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: model,
-      messages: [
-        {
-          role: "system",
-          content: NEWS_SEARCH_SYSTEM_PROMPT,
-        },
-        {
-          role: "user",
-          content: "Find 3-5 recent and notable news stories in radiology and medical imaging from the past week. Format the results as specified JSON.",
-        },
-      ],
-      temperature: 0.1,
-      max_tokens: 4000,
-      top_p: 0.9,
-    }),
-  });
-
-  const result = await response.json();
-  
-  try {
-    const completion = result.choices[0]?.message?.content;
-    if (completion) {
-      console.log(`Received response from Perplexity: ${completion.substring(0, 100)}...`);
-      
-      // Parse JSON array from the text response
-      let newsStories;
-      
-      // Check if response is already JSON
-      if (completion.trim().startsWith("[") && completion.trim().endsWith("]")) {
-        newsStories = JSON.parse(completion);
-      } else {
-        // Try to extract JSON array from the text response
-        const jsonMatch = completion.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          newsStories = JSON.parse(jsonMatch[0]);
-        } else {
-          console.warn("Could not parse JSON from Perplexity response");
-          throw new Error("Failed to extract news stories from the response");
-        }
-      }
-      
-      // Validate the structure
-      if (!Array.isArray(newsStories) || newsStories.length === 0) {
-        throw new Error("No news stories found or invalid format");
-      }
-      
-      // Make sure each story has the required fields
-      return newsStories.map(story => ({
-        title: story.title || "Untitled",
-        summary: story.summary || "No summary available",
-        source: story.source || "Unknown source",
-        date: story.date || new Date().toISOString().split("T")[0]
-      }));
-    }
-  } catch (parseError) {
-    console.error(`Error parsing Perplexity response: ${parseError.message}`);
-    throw new Error(`Failed to parse news stories: ${parseError.message}`);
-  }
-
-  throw new Error("No content received from Perplexity");
 }
 
 // Function to generate podcast script using OpenAI API
