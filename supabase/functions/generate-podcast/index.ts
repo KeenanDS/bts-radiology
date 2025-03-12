@@ -12,19 +12,35 @@ const openAIApiKey = Deno.env.get("OPENAI_API_KEY");
 // Initialize Supabase client
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// System prompt for Perplexity news search
-const NEWS_SEARCH_SYSTEM_PROMPT = `You are a specialized research assistant focused on medical imaging and radiology news. 
-Your task is to find 4 to 5 recent news stories (from the past week) about radiology, medical imaging, or related healthcare technology.
+// System prompt for Perplexity news search - Updated with new healthcare topics
+const NEWS_SEARCH_SYSTEM_PROMPT = `You are a specialized research assistant focused on medical imaging, healthcare tech, and advancements in medicine news. 
+Search for the most significant news stories in healthcare, medical imaging/radiology, genomics, medicine, and healthcare technology published within the past 7 days from reputable medical news sources, academic journals, and mainstream publications with strong healthcare reporting.
 
 Return ONLY a JSON array of objects with these fields:
 [
   {
-    "title": "Title of the news story",
-    "summary": "A 5-6 sentence summary of the key points",
-    "source": "Source of the news (publication, website)",
+    "title": "Complete article title",
+    "summary": "A two-paragraph summary of the key findings, implications, and relevance to healthcare professionals",
+    "source": "Source name",
     "date": "Publication date (YYYY-MM-DD format)"
   }
-]`;
+]
+
+Topic areas to include:
+- Medical imaging and radiology advancements
+- Genomics research and breakthroughs
+- General medicine and treatment innovations
+- Healthcare technology developments
+- Healthcare startups (focus only on product launches or technological/clinical advancements, NOT funding announcements)
+
+Important requirements:
+- Only include articles published within the past 7 days
+- Only source from reputable medical publications, academic journals, or mainstream outlets with established healthcare reporting
+- Present up to 4 articles maximum, but do not fabricate or include older articles to reach this number
+- If fewer than 4 articles are available from the past 7 days, only present those that meet the criteria
+- If no qualifying articles exist from the past 7 days, return an empty array []
+
+These summaries will be used to create an AI-generated podcast on recent healthcare news and innovations.`;
 
 // Standard intro and outro templates
 const STANDARD_INTRO = `Welcome to "Beyond the Scan," the first AI podcast dedicated to the latest developments in radiology and medical imaging. I'm Jackie, your host, and today is {date}.
@@ -297,7 +313,7 @@ async function collectNewsStories() {
           },
           {
             role: "user",
-            content: "Find 3-5 recent and notable news stories in radiology and medical imaging from the past week. Format the results as specified JSON.",
+            content: "Find the most significant healthcare and medical imaging news stories from the past 7 days. Format the results as specified JSON.",
           },
         ],
         temperature: 0.1,
@@ -331,8 +347,14 @@ async function collectNewsStories() {
         }
         
         // Validate the structure
-        if (!Array.isArray(newsStories) || newsStories.length === 0) {
-          throw new Error("No news stories found or invalid format");
+        if (!Array.isArray(newsStories)) {
+          console.log("Response is not an array, returning empty array");
+          return [];
+        }
+        
+        if (newsStories.length === 0) {
+          console.log("No news stories found for the past 7 days");
+          return [];
         }
         
         // Make sure each story has the required fields
