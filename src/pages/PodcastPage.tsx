@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -243,12 +242,17 @@ const PodcastPage = () => {
         
       if (error) throw error;
       
-      if (isPodcastEpisode(data)) {
+      console.log("Fetched episode data:", data);
+      
+      if (data) {
         if (data.podcast_script) {
           setFullScript(data.podcast_script);
         }
+        
         if (data.audio_url) {
           setAudioUrl(data.audio_url);
+        } else {
+          setAudioUrl(null);
         }
       } else {
         toast({
