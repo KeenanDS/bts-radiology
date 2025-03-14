@@ -237,10 +237,10 @@ const PodcastPage = () => {
       // TypeScript narrow: Check if data exists and is not null
       if (data && typeof data === 'object') {
         // Now TypeScript knows data is an object, not an error
-        if (data.podcast_script) {
+        if ('podcast_script' in data && data.podcast_script) {
           setFullScript(data.podcast_script);
         }
-        if (data.audio_url) {
+        if ('audio_url' in data && data.audio_url) {
           setAudioUrl(data.audio_url);
         }
       } else {
