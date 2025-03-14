@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -12,9 +11,9 @@ const openAIApiKey = Deno.env.get("OPENAI_API_KEY");
 // Initialize Supabase client
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// System prompt for Perplexity news search - Updated with clearer guidance on topic diversity
-const NEWS_SEARCH_SYSTEM_PROMPT = `You are a specialized research assistant focused on medical imaging, healthcare tech, and advancements in medicine news. 
-Search for the most significant news stories in healthcare, medical imaging/radiology, genomics, medicine, and healthcare technology published within the past 7 days from reputable medical news sources, academic journals, and mainstream publications with strong healthcare reporting.
+// Create a dynamic news search system prompt with a configurable time window
+const createNewsSearchPrompt = (daysBack) => `You are a specialized research assistant focused on medical imaging, healthcare tech, and advancements in medicine news. 
+Search for the most significant news stories in healthcare, medical imaging/radiology, genomics, medicine, and healthcare technology published within the past ${daysBack} days from reputable medical news sources, academic journals, and mainstream publications with strong healthcare reporting.
 
 Return your findings as a structured text in the following format for EACH article:
 
@@ -41,11 +40,11 @@ Topic areas to include:
 - Healthcare startups with new technologies (focus on the technology, not funding)
 
 Other important requirements:
-- Only include articles published within the past 7 days
+- Only include articles published within the past ${daysBack} days
 - Only source from reputable medical publications, academic journals, or mainstream outlets with established healthcare reporting
 - Present up to 4 articles maximum, but do not fabricate or include older articles to reach this number
-- If fewer than 4 articles are available from the past 7 days, only present those that meet the criteria
-- If no qualifying articles exist from the past 7 days, clearly state "NO_RECENT_ARTICLES_FOUND"
+- If fewer than 4 articles are available from the past ${daysBack} days, only present those that meet the criteria
+- If no qualifying articles exist from the past ${daysBack} days, clearly state "NO_RECENT_ARTICLES_FOUND"
 
 These summaries will be used to create an AI-generated podcast on recent healthcare news and innovations.`;
 
@@ -124,6 +123,9 @@ const BENNET_VOICE_ID = "bmAn0TLASQN7ctGBMHgN";
 // Maximum retry attempts for API calls
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
+
+// Time windows for progressive search (in days)
+const TIME_WINDOWS = [7, 14, 30];
 
 // Helper function to implement retries with exponential backoff
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = MAX_RETRIES): Promise<Response> {
@@ -252,28 +254,63 @@ serve(async (req) => {
     console.log(`Created podcast episode with ID: ${episodeId}`);
 
     try {
-      // Step 1: Collect news stories with Perplexity (as plaintext)
-      console.log("Collecting news stories from Perplexity...");
-      const rawNewsData = await collectNewsStoriesRaw();
-      console.log(`Received raw news data from Perplexity. Length: ${rawNewsData.length} characters`);
-      console.log(`Preview of raw news data: ${rawNewsData.substring(0, 200)}...`);
+      // Progressive search for news stories with expanding time windows
+      let newsStories = [];
+      let searchedTimeWindow = 0;
+      let searchAttempts = [];
       
-      // Step 2: Convert the raw news data to structured JSON using OpenAI
-      console.log("Converting raw news data to structured JSON using OpenAI...");
-      const newsStories = await convertToStructuredJson(rawNewsData);
-      console.log(`Converted to JSON. Found ${newsStories.length} news stories`);
+      for (const daysBack of TIME_WINDOWS) {
+        searchedTimeWindow = daysBack;
+        console.log(`Attempting to collect news stories from past ${daysBack} days...`);
+        
+        // Collect news stories with current time window
+        const rawNewsData = await collectNewsStoriesRaw(daysBack);
+        console.log(`Received raw news data for ${daysBack}-day window. Length: ${rawNewsData.length} characters`);
+        
+        // Keep track of search attempts
+        searchAttempts.push({ daysBack, result: rawNewsData.includes("NO_RECENT_ARTICLES_FOUND") ? "No articles found" : "Search completed" });
+        
+        // Convert the raw news data to structured JSON
+        if (!rawNewsData.includes("NO_RECENT_ARTICLES_FOUND")) {
+          newsStories = await convertToStructuredJson(rawNewsData);
+          console.log(`Found ${newsStories.length} news stories within ${daysBack} days`);
+          
+          // If we found at least one story, break the loop
+          if (newsStories.length > 0) {
+            break;
+          }
+        }
+      }
 
-      // Update the episode with news stories
+      // Update episode with search results
       await supabase
         .from("podcast_episodes")
         .update({
           news_stories: newsStories,
-          status: "generating_script",
+          status: newsStories.length > 0 ? "generating_script" : "error",
+          error_message: newsStories.length === 0 ? `No news stories found within the last ${searchedTimeWindow} days. Search attempts: ${JSON.stringify(searchAttempts)}` : null,
           voice_id: BENNET_VOICE_ID, // Ensure voice_id is maintained during updates
         })
         .eq("id", episodeId);
 
-      // Step 3: Generate podcast script with OpenAI
+      // If no news stories found after all attempts, return error
+      if (newsStories.length === 0) {
+        console.error(`No news stories found after searching up to ${searchedTimeWindow} days back`);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `No relevant healthcare or medical imaging news stories found within the last ${searchedTimeWindow} days. Please try again later or consider expanding your search criteria.`,
+            searchAttempts,
+            episodeId,
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Generate podcast script with found news stories
       console.log("Generating podcast script...");
       const podcastScript = await generatePodcastScript(newsStories, scheduledFor);
       console.log("Podcast script generated successfully");
@@ -295,6 +332,8 @@ serve(async (req) => {
           episodeId,
           newsStories,
           scriptPreview: podcastScript.substring(0, 500) + "...",
+          searchedTimeWindow,
+          searchAttempts,
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -341,10 +380,13 @@ serve(async (req) => {
   }
 });
 
-// Function to collect news stories in raw text format from Perplexity
-async function collectNewsStoriesRaw() {
+// Function to collect news stories in raw text format from Perplexity with dynamic time window
+async function collectNewsStoriesRaw(daysBack = 7) {
   try {
-    console.log("Preparing Perplexity API request for news stories using sonar-reasoning-pro model");
+    console.log(`Preparing Perplexity API request for news stories from past ${daysBack} days using sonar-reasoning-pro model`);
+    
+    // Use the dynamic news search prompt with the specified time window
+    const dynamicPrompt = createNewsSearchPrompt(daysBack);
     
     // Use the sonar-reasoning-pro model for better reasoning and structured output
     const response = await fetchWithRetry("https://api.perplexity.ai/chat/completions", {
@@ -358,11 +400,11 @@ async function collectNewsStoriesRaw() {
         messages: [
           {
             role: "system",
-            content: NEWS_SEARCH_SYSTEM_PROMPT,
+            content: dynamicPrompt,
           },
           {
             role: "user",
-            content: "Find the most significant healthcare and medical imaging news stories from the past 7 days. Format the results as specified.",
+            content: `Find the most significant healthcare and medical imaging news stories from the past ${daysBack} days. Format the results as specified.`,
           },
         ],
         temperature: 0.1,
@@ -379,18 +421,18 @@ async function collectNewsStoriesRaw() {
       throw new Error("No content received from Perplexity API");
     }
 
-    console.log(`Received response from Perplexity: ${completion.substring(0, 100)}...`);
+    console.log(`Received response from Perplexity (${daysBack} days): ${completion.substring(0, 100)}...`);
     
     // Check for the NO_RECENT_ARTICLES_FOUND message
     if (completion.includes("NO_RECENT_ARTICLES_FOUND")) {
-      console.log("No recent articles found according to Perplexity");
+      console.log(`No recent articles found within ${daysBack} days according to Perplexity`);
       return "NO_RECENT_ARTICLES_FOUND";
     }
     
     return completion;
   } catch (error) {
-    console.error(`Error collecting news stories: ${error.message}`);
-    throw new Error(`Failed to collect news stories: ${error.message}`);
+    console.error(`Error collecting news stories (${daysBack} days): ${error.message}`);
+    throw new Error(`Failed to collect news stories for ${daysBack} days: ${error.message}`);
   }
 }
 

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +17,8 @@ import {
   Music, 
   History,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Clock
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -37,6 +39,11 @@ interface PodcastGenerationResult {
   scriptPreview?: string;
   error?: string;
   details?: string;
+  searchedTimeWindow?: number;
+  searchAttempts?: Array<{
+    daysBack: number;
+    result: string;
+  }>;
 }
 
 interface PodcastEpisode {
@@ -50,6 +57,7 @@ interface PodcastEpisode {
   }>;
   status: string;
   audio_url?: string;
+  error_message?: string;
 }
 
 const PodcastPage = () => {
@@ -63,6 +71,7 @@ const PodcastPage = () => {
   const [currentEpisodeId, setCurrentEpisodeId] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [expandedTimeWindow, setExpandedTimeWindow] = useState(false);
   const { toast } = useToast();
 
   const handleGeneratePodcast = async () => {
@@ -133,6 +142,7 @@ const PodcastPage = () => {
     setFullScript(null);
     setCurrentEpisodeId(null);
     setAudioUrl(null);
+    setExpandedTimeWindow(false);
     
     try {
       const currentDate = new Date();
@@ -169,17 +179,23 @@ const PodcastPage = () => {
         setCurrentEpisodeId(data.episodeId);
       }
 
+      const timeWindowMessage = data.searchedTimeWindow 
+        ? ` (searched past ${data.searchedTimeWindow} days)`
+        : "";
+
       toast({
         title: "Success",
-        description: "Instant podcast generated successfully with latest news",
+        description: `Instant podcast generated successfully with latest news${timeWindowMessage}`,
       });
     } catch (error) {
       console.error("Error generating instant podcast:", error);
       
       const errorMessage = error instanceof Error ? error.message : "Failed to generate instant podcast";
-      const detailedMessage = errorMessage.includes("Perplexity") 
-        ? "News service is temporarily unavailable. Please try again in a few minutes." 
-        : errorMessage;
+      const detailedMessage = errorMessage.includes("No relevant healthcare") 
+        ? "No relevant healthcare news found in the recent timeframe. Try expanding the search window." 
+        : errorMessage.includes("Perplexity") 
+          ? "News service is temporarily unavailable. Please try again in a few minutes."
+          : errorMessage;
       
       toast({
         title: "Error",
@@ -190,14 +206,17 @@ const PodcastPage = () => {
       setResult({
         success: false,
         error: errorMessage,
-        details: "The podcast generation service is experiencing issues. This might be due to temporary problems with our news data provider."
+        details: "The podcast generation service is experiencing issues. This might be due to a lack of recent news stories or temporary problems with our news data provider."
       });
     } finally {
       setIsGeneratingInstant(false);
     }
   };
 
-  const handleRetryGenerateInstant = () => {
+  const handleRetryGenerateInstant = (expandWindow = false) => {
+    if (expandWindow) {
+      setExpandedTimeWindow(true);
+    }
     handleGenerateInstantPodcast();
   };
 
@@ -209,7 +228,7 @@ const PodcastPage = () => {
     try {
       const { data, error } = await supabase
         .from("podcast_episodes")
-        .select("podcast_script, audio_url, status")
+        .select("podcast_script, audio_url, status, error_message")
         .eq("id", currentEpisodeId)
         .single();
         
@@ -223,7 +242,9 @@ const PodcastPage = () => {
       } else {
         toast({
           title: "Warning",
-          description: data.status === "error" ? "Error generating podcast." : "No full script available for this episode yet.",
+          description: data.status === "error" 
+            ? `Error generating podcast: ${data.error_message || "Unknown error"}` 
+            : "No full script available for this episode yet.",
           variant: "destructive",
         });
       }
@@ -435,6 +456,13 @@ const PodcastPage = () => {
                       </>
                     )}
                   </Button>
+                  
+                  {expandedTimeWindow && (
+                    <div className="flex items-center justify-center gap-2 text-sm text-amber-300">
+                      <Clock className="h-4 w-4" />
+                      <span>Searching with expanded time window (up to 30 days)</span>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -453,7 +481,7 @@ const PodcastPage = () => {
                     </CardTitle>
                     <CardDescription className="text-gray-400">
                       {result.success 
-                        ? `Successfully collected ${result.newsStories?.length || 0} news stories and generated a podcast script.` 
+                        ? `Successfully collected ${result.newsStories?.length || 0} news stories${result.searchedTimeWindow ? ` from the past ${result.searchedTimeWindow} days` : ''} and generated a podcast script.` 
                         : `Error: ${result.error}`}
                     </CardDescription>
                   </CardHeader>
@@ -463,18 +491,52 @@ const PodcastPage = () => {
                       <div className="p-4 bg-[#1a1f3d] rounded-lg border border-red-900/30">
                         <h4 className="text-white font-medium mb-2">Error Details</h4>
                         <p className="text-gray-300 mb-4">{result.details || "An error occurred during podcast generation. This might be due to temporary issues with our services."}</p>
-                        <Button 
-                          onClick={handleRetryGenerateInstant}
-                          className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white"
-                          disabled={isGeneratingInstant}
-                        >
-                          {isGeneratingInstant ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <RefreshCw className="mr-2 h-4 w-4" />
+                        
+                        <div className="flex flex-wrap gap-3">
+                          <Button 
+                            onClick={() => handleRetryGenerateInstant(false)}
+                            className="bg-[#2a2f5d] hover:bg-[#3a3f7d] text-white"
+                            disabled={isGeneratingInstant}
+                          >
+                            {isGeneratingInstant ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="mr-2 h-4 w-4" />
+                            )}
+                            Retry Generation
+                          </Button>
+                          
+                          {result.error?.includes("No relevant healthcare") && (
+                            <Button 
+                              onClick={() => handleRetryGenerateInstant(true)}
+                              className="bg-amber-700 hover:bg-amber-800 text-white"
+                              disabled={isGeneratingInstant || expandedTimeWindow}
+                            >
+                              {isGeneratingInstant ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Clock className="mr-2 h-4 w-4" />
+                              )}
+                              Try with Expanded Time Window
+                            </Button>
                           )}
-                          Retry Generation
-                        </Button>
+                        </div>
+                        
+                        {result.searchAttempts && result.searchAttempts.length > 0 && (
+                          <div className="mt-4">
+                            <h5 className="text-sm font-medium text-gray-300 mb-2">Search Attempts</h5>
+                            <div className="space-y-1 text-xs text-gray-400">
+                              {result.searchAttempts.map((attempt, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                  <span>• Past {attempt.daysBack} days:</span>
+                                  <span className={attempt.result.includes("No") ? "text-red-400" : "text-green-400"}>
+                                    {attempt.result}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   )}
