@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { format } from "date-fns";
 import { 
@@ -11,7 +10,8 @@ import {
   Check,
   Clock,
   Trash2,
-  Star
+  Star,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PodcastEpisode } from "./PodcastHistory";
@@ -25,12 +25,14 @@ interface PodcastHistoryItemProps {
   episode: PodcastEpisode;
   onDelete: (id: string) => void;
   onSetFeatured: (id: string) => void;
+  onRefresh?: () => void;
 }
 
-const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured }: PodcastHistoryItemProps) => {
+const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: PodcastHistoryItemProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSettingFeatured, setIsSettingFeatured] = useState(false);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const { toast } = useToast();
   
   const formatDate = (dateString: string) => {
@@ -71,7 +73,6 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured }: PodcastHistory
     try {
       setIsDeleting(true);
       
-      // Delete from database
       const { error } = await supabase
         .from("podcast_episodes")
         .delete()
@@ -84,7 +85,6 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured }: PodcastHistory
         description: "Episode deleted successfully",
       });
       
-      // Call parent onDelete callback to update UI
       onDelete(episode.id);
     } catch (error) {
       console.error("Error deleting podcast episode:", error);
@@ -111,7 +111,6 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured }: PodcastHistory
     try {
       setIsSettingFeatured(true);
       
-      // Update database to set this episode as featured
       const { error } = await supabase
         .from("podcast_episodes")
         .update({ is_featured: true })
@@ -124,7 +123,6 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured }: PodcastHistory
         description: "Episode set as featured on homepage",
       });
       
-      // Call parent callback to update UI
       onSetFeatured(episode.id);
     } catch (error) {
       console.error("Error setting episode as featured:", error);
@@ -148,11 +146,67 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured }: PodcastHistory
     link.click();
     document.body.removeChild(link);
   };
-  
-  // Extract a small preview of the script
+
+  const handleGenerateAudio = async () => {
+    if (!episode.id) {
+      toast({
+        title: "Error",
+        description: "Episode ID is missing",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGeneratingAudio(true);
+    
+    try {
+      toast({
+        title: "Generating Audio",
+        description: "Converting podcast script to audio. This may take a few minutes...",
+      });
+
+      const { data, error } = await supabase.functions.invoke(
+        "generate-podcast-audio",
+        {
+          body: { episodeId: episode.id },
+        }
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data || !data.success) {
+        throw new Error(data?.error || "Failed to generate podcast audio");
+      }
+
+      toast({
+        title: "Success",
+        description: "Podcast audio generated successfully!",
+      });
+      
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error("Error generating podcast audio:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to generate podcast audio",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingAudio(false);
+    }
+  };
+
   const scriptPreview = episode.podcast_script 
     ? episode.podcast_script.slice(0, 150) + (episode.podcast_script.length > 150 ? "..." : "")
     : "No script available";
+
+  const canGenerateAudio = episode.podcast_script && 
+                          !episode.audio_url && 
+                          episode.status === "completed";
 
   return (
     <Collapsible 
@@ -256,7 +310,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured }: PodcastHistory
       
       <CollapsibleContent>
         <div className="px-4 pb-4 space-y-4">
-          {episode.audio_url && (
+          {episode.audio_url ? (
             <div className="mt-4">
               <div className="flex items-center text-gray-300 text-sm mb-2">
                 <Music className="h-4 w-4 mr-2" />
@@ -268,6 +322,30 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured }: PodcastHistory
                 subtitle="Beyond the Scan"
                 showDownload={true}
               />
+            </div>
+          ) : canGenerateAudio && (
+            <div className="mt-4">
+              <div className="flex items-center text-gray-300 text-sm mb-2">
+                <Music className="h-4 w-4 mr-2" />
+                Generate Podcast Audio
+              </div>
+              <Button 
+                onClick={handleGenerateAudio}
+                className="w-full bg-gradient-to-r from-[#3a3f7d] to-[#6366f1] hover:from-[#4a4f8d] hover:to-[#7376ff] text-white"
+                disabled={isGeneratingAudio}
+              >
+                {isGeneratingAudio ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating Audio...
+                  </>
+                ) : (
+                  <>
+                    <Music className="mr-2 h-4 w-4" />
+                    Generate Podcast Audio
+                  </>
+                )}
+              </Button>
             </div>
           )}
           

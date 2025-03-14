@@ -107,6 +107,7 @@ const PodcastHistory = () => {
             episode={episode} 
             onDelete={handleDeleteEpisode}
             onSetFeatured={handleSetFeatured}
+            onRefresh={fetchPodcastEpisodes}
           />
         ))}
       </CardContent>
