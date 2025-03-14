@@ -12,7 +12,7 @@ const openAIApiKey = Deno.env.get("OPENAI_API_KEY");
 // Initialize Supabase client
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// System prompt for Perplexity news search - Updated to request plaintext response
+// System prompt for Perplexity news search - Updated with clearer guidance on topic diversity
 const NEWS_SEARCH_SYSTEM_PROMPT = `You are a specialized research assistant focused on medical imaging, healthcare tech, and advancements in medicine news. 
 Search for the most significant news stories in healthcare, medical imaging/radiology, genomics, medicine, and healthcare technology published within the past 7 days from reputable medical news sources, academic journals, and mainstream publications with strong healthcare reporting.
 
@@ -24,14 +24,23 @@ SOURCE: Source name
 DATE: Publication date (YYYY-MM-DD format)
 ---
 
-Topic areas to include:
-- Medical imaging and radiology advancements
-- Genomics research and breakthroughs
-- General medicine and treatment innovations
-- Healthcare technology developments
-- Healthcare startups (focus only on product launches or technological/clinical advancements, NOT funding announcements)
+IMPORTANT REQUIREMENTS FOR TOPIC DIVERSITY:
+- Focus primarily on technological advancements, scientific breakthroughs, and research findings
+- Aim for a diverse mix of stories with this recommended distribution:
+  * At least 2 stories about technological innovations, new devices, or software in healthcare
+  * At least 1 story about research findings, clinical studies, or scientific breakthroughs
+  * No more than 1 story about healthcare policy, regulation, or industry business news (if relevant)
+- AVOID political news sources or politically charged topics when possible
+- If covering policy/regulatory news, focus ONLY on direct healthcare implications, not political angles
 
-Important requirements:
+Topic areas to include:
+- Medical imaging and radiology advancements (priority)
+- Healthcare technology innovations and new devices (priority)
+- Genomics research and breakthroughs
+- Research studies with significant clinical implications
+- Healthcare startups with new technologies (focus on the technology, not funding)
+
+Other important requirements:
 - Only include articles published within the past 7 days
 - Only source from reputable medical publications, academic journals, or mainstream outlets with established healthcare reporting
 - Present up to 4 articles maximum, but do not fabricate or include older articles to reach this number
@@ -83,25 +92,31 @@ If you found today's discussion valuable, please subscribe to our podcast and sh
 
 I'll be back next week with another episode of "Beyond the Scan." Until then, this is Jackie, reminding you that what we do makes a difference in countless lives every day.`;
 
-// System prompt for podcast script generation with consistent structure
+// Updated system prompt for podcast script generation with improved formatting guidance
 const PODCAST_SCRIPT_SYSTEM_PROMPT = `You are a scriptwriter for "Beyond the Scan," a professional medical podcast about radiology and medical imaging.
 
-Create an engaging podcast script based on the provided news stories, following this EXACT structure:
+Create an engaging podcast script based on the provided news stories, following this structure:
 
-1. Use the intro provided in the user prompt exactly as is.
+1. Start with the intro provided in the user prompt exactly as is.
 
 2. For each news story:
-   - Create a clear section header/transition
+   - Create a clear section header using a natural transition phrase like "Moving on to our next story..." or "Our next topic explores..."
    - Provide thorough coverage with clinical context
    - Explain relevance and implications for medical professionals
    - Add thoughtful commentary on how it might affect practice
    - Add a natural transition to the next news story
 
-3. Use the outro provided in the user prompt exactly as is.
+3. End with the outro provided in the user prompt exactly as is.
+
+IMPORTANT FORMATTING INSTRUCTIONS:
+- DO NOT include ANY section labels or formatting markers in the script (no "INTRO:", "STORY 1:", "OUTRO:" markers)
+- The script should be written as natural spoken content without any structural labels
+- Do not include asterisks, bullet points, or any other formatting characters
+- Format the script as pure spoken content that will be read aloud without any non-verbal elements
 
 The tone should be professional but conversational, suitable for medical professionals.
 The script should be formatted as if it's being read by Dr. Jackie as the host.
-Make the content between intro and outro sound natural and engaging. Aim for a 8-12 minute podcast (about 1500-2000 word script).`;
+Make the content sound natural and engaging. Aim for a 8-12 minute podcast (about 1500-2000 word script).`;
 
 // Explicitly define Bennet's voice ID
 const BENNET_VOICE_ID = "bmAn0TLASQN7ctGBMHgN";
@@ -509,7 +524,7 @@ ${introWithDynamicContent}
 Please use the exact following outro for the podcast:
 ${outroWithDynamicContent}
 
-Format the script following our exact structure with the specified intro and outro. Be sure to provide insightful analysis of each story.`;
+Remember, this is for audio - DO NOT include any formatting labels or section markers (like "intro:" or "outro:"). The script should be pure spoken content as if Jackie is reading it naturally.`;
 
     const response = await fetchWithRetry("https://api.openai.com/v1/chat/completions", {
       method: "POST",
