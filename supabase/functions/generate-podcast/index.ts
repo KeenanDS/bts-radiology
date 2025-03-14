@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -76,46 +77,53 @@ Rules:
 
 DO NOT add any commentary, explanation, or text outside the JSON array.`;
 
-// Standard intro and outro templates - Base templates that will be dynamically filled
-const STANDARD_INTRO_BASE = `Welcome to "Beyond the Scan," the first AI podcast dedicated to the latest developments in radiology and medical imaging. I'm Jackie, your host, and today is {date}.
+// Updated intro template with a more conversational style
+const STANDARD_INTRO_BASE = `Hey there, welcome to "Beyond the Scan"! I'm Jackie, your host, and I'm so glad you're joining me today, {date}.
 
-Beyond the Scan is proudly sponsored by RadiologyJobs.com, connecting imaging professionals with career opportunities nationwide.
+Quick shoutout to our sponsor RadiologyJobs.com—they're doing amazing work connecting imaging professionals with great opportunities nationwide.
 
 {headlines_preview}`;
 
-const STANDARD_OUTRO_BASE = `As we wrap up today's episode of "Beyond the Scan," I want to thank you for joining me on this exploration of the latest advancements in our field. 
+// Updated outro template with a more personal touch
+const STANDARD_OUTRO_BASE = `Well, that's all we have for today's episode of "Beyond the Scan." I've really enjoyed sharing these developments with you.
 
 {top_story_impact}
 
-If you found today's discussion valuable, please subscribe to our podcast and share it with colleagues who might benefit. You can also visit our website at beyondthescan.com for additional resources related to today's topics.
+If you found today's discussion helpful, I'd love it if you'd subscribe and share with your colleagues. And hey, swing by our website at beyondthescan.com where we've got some great additional resources on these topics.
 
-I'll be back next week with another episode of "Beyond the Scan." Until then, this is Jackie, reminding you that what we do makes a difference in countless lives every day.`;
+I'll be back next week with more exciting updates. This is Jackie signing off, and remember—what we do really does make a difference in people's lives every day. Take care!`;
 
-// Updated system prompt for podcast script generation with improved formatting guidance
-const PODCAST_SCRIPT_SYSTEM_PROMPT = `You are a scriptwriter for "Beyond the Scan," a professional medical podcast about radiology and medical imaging.
+// Updated system prompt for podcast script generation with more conversational guidance
+const PODCAST_SCRIPT_SYSTEM_PROMPT = `You are a scriptwriter for "Beyond the Scan," a friendly, conversational podcast about radiology and medical imaging.
 
-Create an engaging podcast script based on the provided news stories, following this structure:
+Write a script that sounds natural and engaging—like Jackie is having a casual conversation with the listener. This should feel like a friendly chat between colleagues, not a formal presentation.
+
+Create a podcast script based on the provided news stories, following this structure:
 
 1. Start with the intro provided in the user prompt exactly as is.
 
 2. For each news story:
-   - Create a clear section header using a natural transition phrase like "Moving on to our next story..." or "Our next topic explores..."
-   - Provide thorough coverage with clinical context
-   - Explain relevance and implications for medical professionals
-   - Add thoughtful commentary on how it might affect practice
-   - Add a natural transition to the next news story
+   - Introduce the topic conversationally, as if you're telling a friend about something exciting
+   - Use casual transitions like "You know what's really interesting?" or "I was so fascinated to learn about..."
+   - Include occasional rhetorical questions like "Have you ever wondered...?" or "Isn't that amazing?"
+   - Express personal reactions: "I was really blown away by this next study..."
+   - Explain complex concepts in plain, accessible language
+   - Relate information to practical clinical scenarios when possible
+   - Add natural-sounding transitions between stories
 
 3. End with the outro provided in the user prompt exactly as is.
 
-IMPORTANT FORMATTING INSTRUCTIONS:
-- DO NOT include ANY section labels or formatting markers in the script (no "INTRO:", "STORY 1:", "OUTRO:" markers)
-- The script should be written as natural spoken content without any structural labels
-- Do not include asterisks, bullet points, or any other formatting characters
-- Format the script as pure spoken content that will be read aloud without any non-verbal elements
+IMPORTANT FORMATTING AND STYLE INSTRUCTIONS:
+- DO NOT include ANY section labels or formatting markers in the script
+- Make it sound like a real person talking, with contractions (it's, we're, that's)
+- Use varied sentence lengths and patterns for natural speech rhythm
+- Include occasional verbal fillers like "you know," "actually," "I mean," but use sparingly
+- Jackie should express genuine enthusiasm and curiosity about the topics
+- Avoid sounding like a news anchor—be warmer, more casual, and personal
+- When referring to headlines in the intro, don't just list them—restate them conversationally and briefly
 
-The tone should be professional but conversational, suitable for medical professionals.
-The script should be formatted as if it's being read by Dr. Jackie as the host.
-Make the content sound natural and engaging. Aim for a 8-12 minute podcast (about 1500-2000 word script).`;
+The script should sound natural when read aloud, as if Jackie is speaking spontaneously rather than reading. 
+Make the content sound warm and engaging. Aim for a 8-12 minute podcast (about 1500-2000 word script).`;
 
 // Explicitly define Bennet's voice ID
 const BENNET_VOICE_ID = "bmAn0TLASQN7ctGBMHgN";
@@ -516,29 +524,43 @@ async function generatePodcastScript(newsStories, scheduledDate) {
       day: 'numeric'
     });
 
-    // Create headlines preview for the intro
+    // Create a more conversational headlines preview for the intro
     let headlinesPreview = "";
     if (newsStories.length > 0) {
-      headlinesPreview = "In today's episode, we'll explore the following stories:\n\n";
+      headlinesPreview = "I've got some really exciting stories to share with you today! ";
       
-      // Add each headline as a bullet point
-      newsStories.forEach((story, index) => {
-        headlinesPreview += `- ${story.title}\n`;
-      });
+      if (newsStories.length === 1) {
+        headlinesPreview += `We're going to talk about ${newsStories[0].title}, which has some fascinating implications for our field.`;
+      } else {
+        headlinesPreview += "We'll be covering ";
+        
+        // Restate headlines conversationally
+        newsStories.forEach((story, index) => {
+          if (index === 0) {
+            headlinesPreview += `a breakthrough in ${story.title.split(':')[0].toLowerCase().replace(/^(new|novel|latest|recent)\s+/i, '')}`;
+          } else if (index === newsStories.length - 1) {
+            headlinesPreview += ` and ${story.title.includes(':') ? story.title.split(':')[0].toLowerCase() : story.title.toLowerCase().replace(/^(new|novel|latest|recent)\s+/i, '')}`;
+          } else {
+            headlinesPreview += `, ${story.title.includes(':') ? story.title.split(':')[0].toLowerCase() : story.title.toLowerCase().replace(/^(new|novel|latest|recent)\s+/i, '')}`;
+          }
+        });
+        
+        headlinesPreview += ". I'm really excited to dive into these stories with you because they're all showing us where healthcare is headed.";
+      }
       
-      // If there's a top story (first story), highlight it
+      // Add a personal touch for the main story
       if (newsStories.length > 0) {
-        headlinesPreview += `\nOur main story today focuses on ${newsStories[0].title}, which we'll discuss in detail along with its implications for healthcare professionals.`;
+        headlinesPreview += ` I think you'll be particularly interested in our main story about ${newsStories[0].title.toLowerCase().replace(/^(new|novel|latest|recent)\s+/i, '')}, which I found absolutely fascinating when I was researching for today's episode.`;
       }
     } else {
       // Default text if no stories were found
-      headlinesPreview = "In today's episode, we'll explore some of the most significant recent developments in medical imaging that are shaping the future of clinical practice. As your guide through the evolving landscape of radiology technology and research, I'm excited to break down what these advances mean for the field and the patients you serve.";
+      headlinesPreview = "Today I've got some really interesting developments in medical imaging to share with you. These are the kinds of advances that are changing how we practice and improving outcomes for our patients. I'm really excited to walk through these with you today.";
     }
 
-    // Create top story impact for the outro
+    // Create conversational top story impact for the outro
     let topStoryImpact = "";
     if (newsStories.length > 0) {
-      topStoryImpact = `I'd like to emphasize the significance of our main story today about ${newsStories[0].title}. This development represents an important step forward in healthcare, with potential to meaningfully impact patient care and clinical practice. As medical professionals, staying informed about such advancements helps us provide the best possible care for our patients.`;
+      topStoryImpact = `You know, I was thinking about our main story today on ${newsStories[0].title.toLowerCase().replace(/^(new|novel|latest|recent)\s+/i, '')}. It really shows how quickly our field is evolving, and I think it's the kind of development that could make a real difference in patient care. That's what I love about doing this podcast - we get to explore these advances together and think about how they'll shape our work.`;
     }
 
     // Fill in the dynamic parts of the intro and outro templates
@@ -555,7 +577,7 @@ ${story.summary}
 Source: ${story.source}, Date: ${story.date}
 `).join("\n\n");
 
-    const userPrompt = `Create a script for the "Beyond the Scan" podcast episode recorded on ${formattedDate}. 
+    const userPrompt = `Create a conversational, friendly script for the "Beyond the Scan" podcast episode recorded on ${formattedDate}. 
 Use these news stories as the content:
 
 ${newsStoriesText}
@@ -566,7 +588,7 @@ ${introWithDynamicContent}
 Please use the exact following outro for the podcast:
 ${outroWithDynamicContent}
 
-Remember, this is for audio - DO NOT include any formatting labels or section markers (like "intro:" or "outro:"). The script should be pure spoken content as if Jackie is reading it naturally.`;
+Remember, this is for audio - DO NOT include any formatting labels or section markers (like "intro:" or "outro:"). The script should be pure spoken content as if Jackie is having a casual conversation with the listener.`;
 
     const response = await fetchWithRetry("https://api.openai.com/v1/chat/completions", {
       method: "POST",
