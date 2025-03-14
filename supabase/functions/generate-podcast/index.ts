@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -77,7 +76,7 @@ Rules:
 
 DO NOT add any commentary, explanation, or text outside the JSON array.`;
 
-// Updated intro template with a more conversational style
+// Updated intro template with improved conversational style and better transitions
 const STANDARD_INTRO_BASE = `Hey there, welcome to "Beyond the Scan"! I'm Jackie, your host, and I'm so glad you're joining me today, {date}.
 
 Quick shoutout to our sponsor RadiologyJobs.com—they're doing amazing work connecting imaging professionals with great opportunities nationwide.
@@ -93,7 +92,7 @@ If you found today's discussion helpful, I'd love it if you'd subscribe and shar
 
 I'll be back next week with more exciting updates. This is Jackie signing off, and remember—what we do really does make a difference in people's lives every day. Take care!`;
 
-// Updated system prompt for podcast script generation with more conversational guidance
+// Updated system prompt for podcast script generation with improved transition instructions
 const PODCAST_SCRIPT_SYSTEM_PROMPT = `You are a scriptwriter for "Beyond the Scan," a friendly, conversational podcast about radiology and medical imaging.
 
 Write a script that sounds natural and engaging—like Jackie is having a casual conversation with the listener. This should feel like a friendly chat between colleagues, not a formal presentation.
@@ -109,7 +108,12 @@ Create a podcast script based on the provided news stories, following this struc
    - Express personal reactions: "I was really blown away by this next study..."
    - Explain complex concepts in plain, accessible language
    - Relate information to practical clinical scenarios when possible
-   - Add natural-sounding transitions between stories
+   - Add natural-sounding transitions between stories like:
+     * "Now, let's shift gears and talk about..."
+     * "Moving on to our next story..."
+     * "Another fascinating development I came across..."
+     * "Speaking of innovations, I also wanted to tell you about..."
+   - Make it absolutely clear when you're transitioning from one story to another
 
 3. End with the outro provided in the user prompt exactly as is.
 
@@ -120,7 +124,7 @@ IMPORTANT FORMATTING AND STYLE INSTRUCTIONS:
 - Include occasional verbal fillers like "you know," "actually," "I mean," but use sparingly
 - Jackie should express genuine enthusiasm and curiosity about the topics
 - Avoid sounding like a news anchor—be warmer, more casual, and personal
-- When referring to headlines in the intro, don't just list them—restate them conversationally and briefly
+- When mentioning headlines in the script, keep them simplified and conversational
 
 The script should sound natural when read aloud, as if Jackie is speaking spontaneously rather than reading. 
 Make the content sound warm and engaging. Aim for a 8-12 minute podcast (about 1500-2000 word script).`;
@@ -514,7 +518,7 @@ async function convertToStructuredJson(rawNewsData: string) {
   }
 }
 
-// Function to generate podcast script using OpenAI API
+// Function to generate podcast script using OpenAI API with improved headline transitions
 async function generatePodcastScript(newsStories, scheduledDate) {
   try {
     const formattedDate = new Date(scheduledDate).toLocaleDateString('en-US', {
@@ -524,33 +528,35 @@ async function generatePodcastScript(newsStories, scheduledDate) {
       day: 'numeric'
     });
 
-    // Create a more conversational headlines preview for the intro
+    // Create a more conversational headlines preview for the intro with clear transitions
     let headlinesPreview = "";
     if (newsStories.length > 0) {
       headlinesPreview = "I've got some really exciting stories to share with you today! ";
       
       if (newsStories.length === 1) {
-        headlinesPreview += `We're going to talk about ${newsStories[0].title}, which has some fascinating implications for our field.`;
+        headlinesPreview += `We're going to talk about ${simplifyHeadline(newsStories[0].title)}, which has some fascinating implications for our field.`;
       } else {
-        headlinesPreview += "We'll be covering ";
-        
-        // Restate headlines conversationally
+        // Create a more conversational list with clear transitions
         newsStories.forEach((story, index) => {
+          const simplifiedTitle = simplifyHeadline(story.title);
+          
           if (index === 0) {
-            headlinesPreview += `a breakthrough in ${story.title.split(':')[0].toLowerCase().replace(/^(new|novel|latest|recent)\s+/i, '')}`;
+            headlinesPreview += `First, we'll be discussing ${simplifiedTitle}. `;
           } else if (index === newsStories.length - 1) {
-            headlinesPreview += ` and ${story.title.includes(':') ? story.title.split(':')[0].toLowerCase() : story.title.toLowerCase().replace(/^(new|novel|latest|recent)\s+/i, '')}`;
+            headlinesPreview += `And finally, we'll wrap up with ${simplifiedTitle}. `;
           } else {
-            headlinesPreview += `, ${story.title.includes(':') ? story.title.split(':')[0].toLowerCase() : story.title.toLowerCase().replace(/^(new|novel|latest|recent)\s+/i, '')}`;
+            const transitionWords = ["Then", "Next", "After that"];
+            const transition = transitionWords[index - 1 % transitionWords.length];
+            headlinesPreview += `${transition}, we'll explore ${simplifiedTitle}. `;
           }
         });
         
-        headlinesPreview += ". I'm really excited to dive into these stories with you because they're all showing us where healthcare is headed.";
+        headlinesPreview += "I'm really excited to dive into these stories with you because they're all showing us where healthcare is headed.";
       }
       
       // Add a personal touch for the main story
       if (newsStories.length > 0) {
-        headlinesPreview += ` I think you'll be particularly interested in our main story about ${newsStories[0].title.toLowerCase().replace(/^(new|novel|latest|recent)\s+/i, '')}, which I found absolutely fascinating when I was researching for today's episode.`;
+        headlinesPreview += ` I think you'll be particularly interested in our main story about ${simplifyHeadline(newsStories[0].title)}, which I found absolutely fascinating when I was researching for today's episode.`;
       }
     } else {
       // Default text if no stories were found
@@ -560,7 +566,7 @@ async function generatePodcastScript(newsStories, scheduledDate) {
     // Create conversational top story impact for the outro
     let topStoryImpact = "";
     if (newsStories.length > 0) {
-      topStoryImpact = `You know, I was thinking about our main story today on ${newsStories[0].title.toLowerCase().replace(/^(new|novel|latest|recent)\s+/i, '')}. It really shows how quickly our field is evolving, and I think it's the kind of development that could make a real difference in patient care. That's what I love about doing this podcast - we get to explore these advances together and think about how they'll shape our work.`;
+      topStoryImpact = `You know, I was thinking about our main story today on ${simplifyHeadline(newsStories[0].title)}. It really shows how quickly our field is evolving, and I think it's the kind of development that could make a real difference in patient care. That's what I love about doing this podcast - we get to explore these advances together and think about how they'll shape our work.`;
     }
 
     // Fill in the dynamic parts of the intro and outro templates
@@ -620,3 +626,26 @@ Remember, this is for audio - DO NOT include any formatting labels or section ma
     throw error;
   }
 }
+
+// Helper function to simplify headlines to be more conversational
+function simplifyHeadline(title) {
+  // Remove specific patterns commonly found in formal headlines
+  let simplifiedTitle = title
+    // Convert to lowercase for more casual tone
+    .toLowerCase()
+    // Remove words like "new", "novel", "latest", "recent" from the beginning
+    .replace(/^(new|novel|latest|recent)\s+/i, '')
+    // Remove ending phrases like "study finds", "researchers say", etc.
+    .replace(/,?\s+(study|research|report|analysis)\s+(finds|says|shows|reveals|suggests|indicates|concludes)\.?$/i, '')
+    // Extract main concept from "Title: Subtitle" format
+    .replace(/^(.+?):\s+(.+)$/, (_, main, _subtitle) => main);
+  
+  // Trim the title to keep it concise (around 8-10 words max)
+  const words = simplifiedTitle.split(' ');
+  if (words.length > 10) {
+    simplifiedTitle = words.slice(0, 8).join(' ') + '...';
+  }
+  
+  return simplifiedTitle.trim();
+}
+
