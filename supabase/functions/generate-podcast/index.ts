@@ -42,24 +42,27 @@ Important requirements:
 
 These summaries will be used to create an AI-generated podcast on recent healthcare news and innovations.`;
 
-// Standard intro and outro templates
-const STANDARD_INTRO = `Welcome to "Beyond the Scan," the first AI podcast dedicated to the latest developments in radiology and medical imaging. I'm Jackie, your host, and today is {date}.
+// Standard intro and outro templates - Base templates that will be dynamically filled
+const STANDARD_INTRO_BASE = `Welcome to "Beyond the Scan," the first AI podcast dedicated to the latest developments in radiology and medical imaging. I'm Jackie, your host, and today is {date}.
 
 Beyond the Scan is proudly sponsored by RadiologyJobs.com, connecting imaging professionals with career opportunities nationwide.
 
-In today's episode, we'll explore some of the most significant recent developments in medical imaging that are shaping the future of clinical practice. As your guide through the evolving landscape of radiology technology and research, I'm excited to break down what these advances mean for the field and the patients you serve.`;
+{headlines_preview}`;
 
-const STANDARD_OUTRO = `As we wrap up today's episode of "Beyond the Scan," I want to thank you for joining me on this exploration of the latest advancements in our field. If you found today's discussion valuable, please subscribe to our podcast and share it with colleagues who might benefit. You can also visit our website at beyondthescan.com for additional resources related to today's topics.
+const STANDARD_OUTRO_BASE = `As we wrap up today's episode of "Beyond the Scan," I want to thank you for joining me on this exploration of the latest advancements in our field. 
 
- I'll be back next week with another episode of "Beyond the Scan." Until then, this is Jackie, reminding you that what we do makes a difference in countless lives every day.`;
+{top_story_impact}
+
+If you found today's discussion valuable, please subscribe to our podcast and share it with colleagues who might benefit. You can also visit our website at beyondthescan.com for additional resources related to today's topics.
+
+I'll be back next week with another episode of "Beyond the Scan." Until then, this is Jackie, reminding you that what we do makes a difference in countless lives every day.`;
 
 // System prompt for podcast script generation with consistent structure
 const PODCAST_SCRIPT_SYSTEM_PROMPT = `You are a scriptwriter for "Beyond the Scan," a professional medical podcast about radiology and medical imaging.
 
 Create an engaging podcast script based on the provided news stories, following this EXACT structure:
 
-1. Start with the EXACT standard intro (do not modify it):
-${STANDARD_INTRO}
+1. Use the intro provided in the user prompt exactly as is.
 
 2. For each news story:
    - Create a clear section header/transition
@@ -68,11 +71,10 @@ ${STANDARD_INTRO}
    - Add thoughtful commentary on how it might affect practice
    - Add a natural transition to the next news story
 
-3. End with the EXACT standard outro (do not modify it):
-${STANDARD_OUTRO}
+3. Use the outro provided in the user prompt exactly as is.
 
 The tone should be professional but conversational, suitable for medical professionals.
-The script should be formatted as if it's being read by Dr.Jackie as the host.
+The script should be formatted as if it's being read by Dr. Jackie as the host.
 Make the content between intro and outro sound natural and engaging. Aim for a 8-12 minute podcast (about 1500-2000 word script).`;
 
 // Explicitly define Bennet's voice ID
@@ -387,19 +389,55 @@ async function generatePodcastScript(newsStories, scheduledDate) {
       day: 'numeric'
     });
 
+    // Create headlines preview for the intro
+    let headlinesPreview = "";
+    if (newsStories.length > 0) {
+      headlinesPreview = "In today's episode, we'll explore the following stories:\n\n";
+      
+      // Add each headline as a bullet point
+      newsStories.forEach((story, index) => {
+        headlinesPreview += `- ${story.title}\n`;
+      });
+      
+      // If there's a top story (first story), highlight it
+      if (newsStories.length > 0) {
+        headlinesPreview += `\nOur main story today focuses on ${newsStories[0].title}, which we'll discuss in detail along with its implications for healthcare professionals.`;
+      }
+    } else {
+      // Default text if no stories were found
+      headlinesPreview = "In today's episode, we'll explore some of the most significant recent developments in medical imaging that are shaping the future of clinical practice. As your guide through the evolving landscape of radiology technology and research, I'm excited to break down what these advances mean for the field and the patients you serve.";
+    }
+
+    // Create top story impact for the outro
+    let topStoryImpact = "";
+    if (newsStories.length > 0) {
+      topStoryImpact = `I'd like to emphasize the significance of our main story today about ${newsStories[0].title}. This development represents an important step forward in healthcare, with potential to meaningfully impact patient care and clinical practice. As medical professionals, staying informed about such advancements helps us provide the best possible care for our patients.`;
+    }
+
+    // Fill in the dynamic parts of the intro and outro templates
+    const introWithDynamicContent = STANDARD_INTRO_BASE
+      .replace("{date}", formattedDate)
+      .replace("{headlines_preview}", headlinesPreview);
+    
+    const outroWithDynamicContent = STANDARD_OUTRO_BASE
+      .replace("{top_story_impact}", topStoryImpact);
+
     const newsStoriesText = newsStories.map((story, index) => 
       `Story ${index + 1}: "${story.title}"
 ${story.summary}
 Source: ${story.source}, Date: ${story.date}
 `).join("\n\n");
 
-    // Create intro with the proper date
-    const introWithDate = STANDARD_INTRO.replace("{date}", formattedDate);
-
     const userPrompt = `Create a script for the "Beyond the Scan" podcast episode recorded on ${formattedDate}. 
 Use these news stories as the content:
 
 ${newsStoriesText}
+
+Please use the exact following intro for the podcast:
+${introWithDynamicContent}
+
+Please use the exact following outro for the podcast:
+${outroWithDynamicContent}
 
 Format the script following our exact structure with the specified intro and outro. Be sure to provide insightful analysis of each story.`;
 
