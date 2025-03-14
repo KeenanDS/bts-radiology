@@ -56,16 +56,6 @@ interface PodcastEpisode {
   }> | null;
   status: string;
   audio_url: string | null;
-  error_message: string | null;
-}
-
-// Type guard to check if data is a valid podcast episode
-function isPodcastEpisode(data: any): data is PodcastEpisode {
-  return (
-    data !== null &&
-    typeof data === 'object' &&
-    'id' in data
-  );
 }
 
 const PodcastPage = () => {
@@ -236,19 +226,19 @@ const PodcastPage = () => {
     try {
       const { data, error } = await supabase
         .from("podcast_episodes")
-        .select("podcast_script, audio_url, status, error_message")
+        .select("podcast_script, audio_url, status")
         .eq("id", currentEpisodeId)
         .maybeSingle();
         
-      if (error) throw error;
+      if (error) {
+        console.error("Database error:", error);
+        throw error;
+      }
       
       console.log("Fetched episode data:", data);
       
       if (data) {
-        if (data.podcast_script) {
-          setFullScript(data.podcast_script);
-        }
-        
+        setFullScript(data.podcast_script);
         if (data.audio_url) {
           setAudioUrl(data.audio_url);
         } else {
