@@ -56,8 +56,8 @@ interface PodcastEpisode {
     date: string;
   }> | null;
   status: string;
-  audio_url?: string | null;
-  error_message?: string | null;
+  audio_url: string | null;
+  error_message: string | null;
 }
 
 const PodcastPage = () => {
@@ -234,7 +234,9 @@ const PodcastPage = () => {
         
       if (error) throw error;
       
-      if (data) {
+      // TypeScript narrow: Check if data exists and is not null
+      if (data && typeof data === 'object') {
+        // Now TypeScript knows data is an object, not an error
         if (data.podcast_script) {
           setFullScript(data.podcast_script);
         }
