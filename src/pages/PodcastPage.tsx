@@ -48,16 +48,16 @@ interface PodcastGenerationResult {
 
 interface PodcastEpisode {
   id: string;
-  podcast_script: string;
+  podcast_script: string | null;
   news_stories: Array<{
     title: string;
     summary: string;
     source: string;
     date: string;
-  }>;
+  }> | null;
   status: string;
-  audio_url?: string;
-  error_message?: string;
+  audio_url?: string | null;
+  error_message?: string | null;
 }
 
 const PodcastPage = () => {
@@ -230,21 +230,21 @@ const PodcastPage = () => {
         .from("podcast_episodes")
         .select("podcast_script, audio_url, status, error_message")
         .eq("id", currentEpisodeId)
-        .single();
+        .maybeSingle();
         
       if (error) throw error;
       
-      if (data && data.podcast_script) {
-        setFullScript(data.podcast_script);
+      if (data) {
+        if (data.podcast_script) {
+          setFullScript(data.podcast_script);
+        }
         if (data.audio_url) {
           setAudioUrl(data.audio_url);
         }
       } else {
         toast({
           title: "Warning",
-          description: data.status === "error" 
-            ? `Error generating podcast: ${data.error_message || "Unknown error"}` 
-            : "No full script available for this episode yet.",
+          description: "No data found for this episode.",
           variant: "destructive",
         });
       }
