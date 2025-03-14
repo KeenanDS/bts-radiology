@@ -20,6 +20,18 @@ The "Beyond the Scan" podcast uses AI to generate both content and audio. This d
 3. **Audio Generation**:
    - Converts the text script to audio using ElevenLabs TTS
 
+## Architecture
+
+The system is organized into several modules:
+- `index.ts` - HTTP request handler and entry point
+- `podcast-processor.ts` - Main orchestration logic
+- `news-service.ts` - News collection and processing
+- `script-generator.ts` - Script generation using AI
+- `headline-utils.ts` - Tools for simplifying headlines
+- `utils.ts` - Shared utilities like retry logic
+- `constants.ts` - Shared constants
+- `prompts.ts` - AI prompts and templates
+
 ## Script Structure
 
 ### Intro Section
@@ -64,3 +76,12 @@ Headlines are simplified in the intro to be more conversational:
 - Script is designed to be read aloud naturally
 - Includes pauses and verbal cues that help with audio pacing
 - Avoids complex sentence structures that would be difficult to follow in audio format
+
+## Progressive Search Strategy
+
+If no relevant stories are found in the past 7 days:
+1. Expands search to past 14 days
+2. If still no results, expands to past 30 days
+3. Maintains detailed records of search attempts
+
+This ensures we always have fresh, relevant content while adapting to news cycles.
