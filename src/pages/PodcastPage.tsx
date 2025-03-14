@@ -60,6 +60,15 @@ interface PodcastEpisode {
   error_message: string | null;
 }
 
+// Type guard to check if data is a valid podcast episode
+function isPodcastEpisode(data: any): data is PodcastEpisode {
+  return (
+    data !== null &&
+    typeof data === 'object' &&
+    'id' in data
+  );
+}
+
 const PodcastPage = () => {
   const [date, setDate] = useState<Date>();
   const [isLoading, setIsLoading] = useState(false);
@@ -234,13 +243,11 @@ const PodcastPage = () => {
         
       if (error) throw error;
       
-      // TypeScript narrow: Check if data exists and is not null
-      if (data && typeof data === 'object') {
-        // Now TypeScript knows data is an object, not an error
-        if ('podcast_script' in data && data.podcast_script) {
+      if (isPodcastEpisode(data)) {
+        if (data.podcast_script) {
           setFullScript(data.podcast_script);
         }
-        if ('audio_url' in data && data.audio_url) {
+        if (data.audio_url) {
           setAudioUrl(data.audio_url);
         }
       } else {
