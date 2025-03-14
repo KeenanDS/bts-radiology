@@ -12,19 +12,17 @@ const openAIApiKey = Deno.env.get("OPENAI_API_KEY");
 // Initialize Supabase client
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// System prompt for Perplexity news search - Updated with new healthcare topics
+// System prompt for Perplexity news search - Updated to request plaintext response
 const NEWS_SEARCH_SYSTEM_PROMPT = `You are a specialized research assistant focused on medical imaging, healthcare tech, and advancements in medicine news. 
 Search for the most significant news stories in healthcare, medical imaging/radiology, genomics, medicine, and healthcare technology published within the past 7 days from reputable medical news sources, academic journals, and mainstream publications with strong healthcare reporting.
 
-Return ONLY a JSON array of objects with these fields:
-[
-  {
-    "title": "Complete article title",
-    "summary": "A two-paragraph summary of the key findings, implications, and relevance to healthcare professionals",
-    "source": "Source name",
-    "date": "Publication date (YYYY-MM-DD format)"
-  }
-]
+Return your findings as a structured text in the following format for EACH article:
+
+TITLE: Complete article title
+SUMMARY: A two-paragraph summary of the key findings, implications, and relevance to healthcare professionals
+SOURCE: Source name
+DATE: Publication date (YYYY-MM-DD format)
+---
 
 Topic areas to include:
 - Medical imaging and radiology advancements
@@ -38,9 +36,37 @@ Important requirements:
 - Only source from reputable medical publications, academic journals, or mainstream outlets with established healthcare reporting
 - Present up to 4 articles maximum, but do not fabricate or include older articles to reach this number
 - If fewer than 4 articles are available from the past 7 days, only present those that meet the criteria
-- If no qualifying articles exist from the past 7 days, return an empty array []
+- If no qualifying articles exist from the past 7 days, clearly state "NO_RECENT_ARTICLES_FOUND"
 
 These summaries will be used to create an AI-generated podcast on recent healthcare news and innovations.`;
+
+// System prompt for OpenAI to convert Perplexity response to structured JSON
+const JSON_CONVERSION_SYSTEM_PROMPT = `You are a data conversion tool that transforms structured text about news articles into valid JSON format.
+
+The input will be a series of articles with TITLE, SUMMARY, SOURCE, and DATE fields.
+If the input contains "NO_RECENT_ARTICLES_FOUND", return an empty array [].
+
+Your output MUST be a valid JSON array containing objects with these fields:
+[
+  {
+    "title": "Complete article title from TITLE field",
+    "summary": "The content from SUMMARY field",
+    "source": "The content from SOURCE field",
+    "date": "The content from DATE field in YYYY-MM-DD format"
+  }
+]
+
+Rules:
+1. ALWAYS return only valid JSON, no explanations or additional text
+2. Ensure proper escaping of quotes and special characters in the JSON
+3. Keep the exact wording from the input for each field
+4. If a field is missing in the input, use appropriate defaults:
+   - For missing title: "Untitled Article"
+   - For missing summary: "No summary provided"
+   - For missing source: "Unknown Source"
+   - For missing date: Use today's date in YYYY-MM-DD format
+
+DO NOT add any commentary, explanation, or text outside the JSON array.`;
 
 // Standard intro and outro templates - Base templates that will be dynamically filled
 const STANDARD_INTRO_BASE = `Welcome to "Beyond the Scan," the first AI podcast dedicated to the latest developments in radiology and medical imaging. I'm Jackie, your host, and today is {date}.
@@ -211,10 +237,16 @@ serve(async (req) => {
     console.log(`Created podcast episode with ID: ${episodeId}`);
 
     try {
-      // Step 1: Collect news stories with Perplexity
+      // Step 1: Collect news stories with Perplexity (as plaintext)
       console.log("Collecting news stories from Perplexity...");
-      const newsStories = await collectNewsStories();
-      console.log(`Collected ${newsStories.length} news stories`);
+      const rawNewsData = await collectNewsStoriesRaw();
+      console.log(`Received raw news data from Perplexity. Length: ${rawNewsData.length} characters`);
+      console.log(`Preview of raw news data: ${rawNewsData.substring(0, 200)}...`);
+      
+      // Step 2: Convert the raw news data to structured JSON using OpenAI
+      console.log("Converting raw news data to structured JSON using OpenAI...");
+      const newsStories = await convertToStructuredJson(rawNewsData);
+      console.log(`Converted to JSON. Found ${newsStories.length} news stories`);
 
       // Update the episode with news stories
       await supabase
@@ -226,7 +258,7 @@ serve(async (req) => {
         })
         .eq("id", episodeId);
 
-      // Step 2: Generate podcast script with OpenAI
+      // Step 3: Generate podcast script with OpenAI
       console.log("Generating podcast script...");
       const podcastScript = await generatePodcastScript(newsStories, scheduledFor);
       console.log("Podcast script generated successfully");
@@ -294,8 +326,8 @@ serve(async (req) => {
   }
 });
 
-// Function to collect news stories using Perplexity API
-async function collectNewsStories() {
+// Function to collect news stories in raw text format from Perplexity
+async function collectNewsStoriesRaw() {
   try {
     console.log("Preparing Perplexity API request for news stories using sonar-reasoning-pro model");
     
@@ -315,7 +347,7 @@ async function collectNewsStories() {
           },
           {
             role: "user",
-            content: "Find the most significant healthcare and medical imaging news stories from the past 7 days. Format the results as specified JSON.",
+            content: "Find the most significant healthcare and medical imaging news stories from the past 7 days. Format the results as specified.",
           },
         ],
         temperature: 0.1,
@@ -326,56 +358,94 @@ async function collectNewsStories() {
 
     const result = await response.json();
     
-    try {
-      const completion = result.choices[0]?.message?.content;
-      if (completion) {
-        console.log(`Received response from Perplexity: ${completion.substring(0, 100)}...`);
-        
-        // Parse JSON array from the text response
-        let newsStories;
-        
-        // Check if response is already JSON
-        if (completion.trim().startsWith("[") && completion.trim().endsWith("]")) {
-          newsStories = JSON.parse(completion);
-        } else {
-          // Try to extract JSON array from the text response
-          const jsonMatch = completion.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            newsStories = JSON.parse(jsonMatch[0]);
-          } else {
-            console.warn("Could not parse JSON from Perplexity response");
-            throw new Error("Failed to extract news stories from the response");
-          }
-        }
-        
-        // Validate the structure
-        if (!Array.isArray(newsStories)) {
-          console.log("Response is not an array, returning empty array");
-          return [];
-        }
-        
-        if (newsStories.length === 0) {
-          console.log("No news stories found for the past 7 days");
-          return [];
-        }
-        
-        // Make sure each story has the required fields
-        return newsStories.map(story => ({
-          title: story.title || "Untitled",
-          summary: story.summary || "No summary available",
-          source: story.source || "Unknown source",
-          date: story.date || new Date().toISOString().split("T")[0]
-        }));
-      }
-    } catch (parseError) {
-      console.error(`Error parsing Perplexity response: ${parseError.message}`);
-      throw new Error(`Failed to parse news stories: ${parseError.message}`);
+    const completion = result.choices?.[0]?.message?.content;
+    if (!completion) {
+      console.error("No content received from Perplexity API");
+      throw new Error("No content received from Perplexity API");
     }
 
-    throw new Error("No content received from Perplexity");
+    console.log(`Received response from Perplexity: ${completion.substring(0, 100)}...`);
+    
+    // Check for the NO_RECENT_ARTICLES_FOUND message
+    if (completion.includes("NO_RECENT_ARTICLES_FOUND")) {
+      console.log("No recent articles found according to Perplexity");
+      return "NO_RECENT_ARTICLES_FOUND";
+    }
+    
+    return completion;
   } catch (error) {
     console.error(`Error collecting news stories: ${error.message}`);
     throw new Error(`Failed to collect news stories: ${error.message}`);
+  }
+}
+
+// Function to convert raw news data to structured JSON using OpenAI
+async function convertToStructuredJson(rawNewsData: string) {
+  try {
+    console.log("Converting raw news data to structured JSON with OpenAI");
+    
+    // If no recent articles were found, return an empty array
+    if (rawNewsData === "NO_RECENT_ARTICLES_FOUND") {
+      console.log("No recent articles found, returning empty array");
+      return [];
+    }
+    
+    const response = await fetchWithRetry("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${openAIApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: JSON_CONVERSION_SYSTEM_PROMPT,
+          },
+          {
+            role: "user",
+            content: rawNewsData,
+          },
+        ],
+        temperature: 0.1,
+        response_format: { type: "json_object" }
+      }),
+    });
+
+    const data = await response.json();
+    const jsonContent = data.choices?.[0]?.message?.content;
+    
+    if (!jsonContent) {
+      console.error("No JSON content received from OpenAI");
+      throw new Error("Failed to convert news stories to JSON");
+    }
+    
+    console.log(`Received JSON from OpenAI: ${jsonContent.substring(0, 100)}...`);
+    
+    try {
+      // Parse the JSON content
+      const parsedContent = JSON.parse(jsonContent);
+      
+      // Check if the content has the expected structure
+      if (Array.isArray(parsedContent)) {
+        return parsedContent;
+      } else if (parsedContent && Array.isArray(parsedContent.articles)) {
+        // Sometimes OpenAI might wrap the array in an object
+        return parsedContent.articles;
+      } else {
+        // The content doesn't have the expected structure
+        console.error("JSON content doesn't have the expected structure:", parsedContent);
+        throw new Error("JSON content doesn't have the expected structure");
+      }
+    } catch (parseError) {
+      console.error(`Error parsing JSON from OpenAI: ${parseError.message}`);
+      console.error(`JSON content: ${jsonContent}`);
+      throw new Error(`Failed to parse JSON from OpenAI: ${parseError.message}`);
+    }
+  } catch (error) {
+    console.error(`Error converting to structured JSON: ${error.message}`);
+    throw error;
   }
 }
 
