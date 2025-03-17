@@ -33,6 +33,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSettingFeatured, setIsSettingFeatured] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const { toast } = useToast();
   
   const formatDate = (dateString: string) => {
@@ -66,6 +67,36 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
             {episode.status || "Pending"}
           </div>
         );
+    }
+  };
+
+  const getAudioProcessingStatus = () => {
+    if (!episode.audio_processing_status) return null;
+    
+    switch (episode.audio_processing_status) {
+      case "processing":
+        return (
+          <div className="flex items-center text-yellow-400 text-xs font-medium">
+            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            Processing with background music
+          </div>
+        );
+      case "completed":
+        return (
+          <div className="flex items-center text-green-400 text-xs font-medium">
+            <Check className="h-3 w-3 mr-1" />
+            Audio processed with background music
+          </div>
+        );
+      case "error":
+        return (
+          <div className="flex items-center text-red-400 text-xs font-medium" title={episode.audio_processing_error || "Error processing audio"}>
+            <Clock className="h-3 w-3 mr-1" />
+            Error processing audio
+          </div>
+        );
+      default:
+        return null;
     }
   };
 
@@ -147,6 +178,17 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     document.body.removeChild(link);
   };
 
+  const handleDownloadProcessedAudio = () => {
+    if (!episode.processed_audio_url) return;
+    
+    const link = document.createElement('a');
+    link.href = episode.processed_audio_url;
+    link.download = `podcast_episode_${episode.id}_with_music.mp3`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleGenerateAudio = async () => {
     if (!episode.id) {
       toast({
@@ -200,6 +242,68 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     }
   };
 
+  const handleProcessAudio = async () => {
+    if (!episode.id) {
+      toast({
+        title: "Error",
+        description: "Episode ID is missing",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!episode.audio_url) {
+      toast({
+        title: "Error",
+        description: "Episode needs to have audio generated first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessingAudio(true);
+    
+    try {
+      toast({
+        title: "Processing Audio",
+        description: "Adding background music to podcast audio. This may take a few minutes...",
+      });
+
+      const { data, error } = await supabase.functions.invoke(
+        "process-podcast-audio",
+        {
+          body: { episodeId: episode.id },
+        }
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data || !data.success) {
+        throw new Error(data?.error || "Failed to process podcast audio");
+      }
+
+      toast({
+        title: "Success",
+        description: "Podcast audio processed with background music!",
+      });
+      
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error("Error processing podcast audio:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to process podcast audio",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessingAudio(false);
+    }
+  };
+
   const scriptPreview = episode.podcast_script 
     ? episode.podcast_script.slice(0, 150) + (episode.podcast_script.length > 150 ? "..." : "")
     : "No script available";
@@ -207,6 +311,10 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
   const canGenerateAudio = episode.podcast_script && 
                           !episode.audio_url && 
                           episode.status === "completed";
+                          
+  const canProcessAudio = episode.audio_url && 
+                         (!episode.processed_audio_url && !episode.audio_processing_status || 
+                          episode.audio_processing_status === "error");
 
   return (
     <Collapsible 
@@ -230,21 +338,38 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
               {formatDate(episode.created_at)}
               <span className="mx-2">•</span>
               {getStatusBadge()}
+              {getAudioProcessingStatus() && (
+                <>
+                  <span className="mx-2">•</span>
+                  {getAudioProcessingStatus()}
+                </>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {episode.audio_url && (
+            {episode.processed_audio_url ? (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
+                onClick={handleDownloadProcessedAudio}
+                title="Download podcast with background music"
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+            ) : episode.audio_url && (
               <Button 
                 variant="outline" 
                 size="sm" 
                 className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
                 onClick={handleDownloadAudio}
+                title="Download raw podcast audio"
               >
                 <Download className="h-4 w-4" />
               </Button>
             )}
             
-            {episode.status === "completed" && episode.audio_url && (
+            {episode.status === "completed" && episode.processed_audio_url && (
               <Button 
                 variant="outline" 
                 size="sm"
@@ -310,11 +435,24 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
       
       <CollapsibleContent>
         <div className="px-4 pb-4 space-y-4">
-          {episode.audio_url ? (
+          {episode.processed_audio_url ? (
             <div className="mt-4">
               <div className="flex items-center text-gray-300 text-sm mb-2">
                 <Music className="h-4 w-4 mr-2" />
-                Audio Playback
+                Processed Audio with Background Music
+              </div>
+              <AudioPlayer 
+                audioUrl={episode.processed_audio_url} 
+                title={`Episode ${formatDate(episode.scheduled_for)} with Music`}
+                subtitle="Beyond the Scan"
+                showDownload={true}
+              />
+            </div>
+          ) : episode.audio_url ? (
+            <div className="mt-4">
+              <div className="flex items-center text-gray-300 text-sm mb-2">
+                <Music className="h-4 w-4 mr-2" />
+                Raw Audio Playback
               </div>
               <AudioPlayer 
                 audioUrl={episode.audio_url} 
@@ -322,6 +460,26 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
                 subtitle="Beyond the Scan"
                 showDownload={true}
               />
+              
+              {canProcessAudio && (
+                <Button 
+                  onClick={handleProcessAudio}
+                  className="w-full mt-3 bg-gradient-to-r from-[#3a3f7d] to-[#6366f1] hover:from-[#4a4f8d] hover:to-[#7376ff] text-white"
+                  disabled={isProcessingAudio}
+                >
+                  {isProcessingAudio ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Processing with Background Music...
+                    </>
+                  ) : (
+                    <>
+                      <Music className="mr-2 h-4 w-4" />
+                      Add Background Music
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           ) : canGenerateAudio && (
             <div className="mt-4">
@@ -388,3 +546,4 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
 };
 
 export default PodcastHistoryItem;
+
