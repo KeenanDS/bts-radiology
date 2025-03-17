@@ -74,25 +74,31 @@ serve(async (req) => {
     
     // Call the audio processor service with Supabase credentials for direct upload
     console.log("Calling external audio processor service with Supabase credentials...");
+    
+    // Structured request to match audio processor expectation
+    const processorRequestBody = {
+      audio_url: audioUrl,
+      background_music_url: defaultMusicUrl,
+      intro_duration: 8000,  // 8 seconds
+      outro_duration: 8000,  // 8 seconds
+      background_volume: -12,  // Lower volume for better voice clarity
+      storage_bucket: "podcast_audio",
+      filename_prefix: `processed_${episodeId}_`,
+      supabase_config: {
+        supabase_url: supabaseUrl,
+        supabase_key: supabaseServiceKey,
+        episode_id: episodeId
+      }
+    };
+
+    console.log("Request body structure:", JSON.stringify(processorRequestBody, null, 2));
+    
     const processorResponse = await fetch(`${fullProcessorUrl}/mix-audio/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        audio_url: audioUrl,
-        background_music_url: defaultMusicUrl,
-        intro_duration: 8000,  // 8 seconds
-        outro_duration: 8000,  // 8 seconds
-        background_volume: -12,  // Lower volume for better voice clarity
-        storage_bucket: "podcast_audio",
-        filename_prefix: `processed_${episodeId}_`,
-        supabase_config: {
-          supabase_url: supabaseUrl,
-          supabase_key: supabaseServiceKey,
-          episode_id: episodeId
-        }
-      })
+      body: JSON.stringify(processorRequestBody)
     });
     
     if (!processorResponse.ok) {

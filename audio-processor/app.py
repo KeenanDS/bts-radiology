@@ -56,6 +56,10 @@ async def mix_audio(
     - Uploads to Supabase storage if credentials provided
     """
     try:
+        # Log the received request for debugging
+        print(f"Received request: {request}")
+        print(f"Received Supabase config: {supabase_config}")
+        
         # Create temp directory
         temp_dir = tempfile.mkdtemp()
         
