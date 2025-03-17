@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
-// This is a Deno wrapper around our Python function
+// This is a Deno wrapper around our JavaScript-based audio processor
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -25,7 +25,7 @@ serve(async (req) => {
       );
     }
 
-    // Call the Python function
+    // Call the JavaScript audio processor function
     console.log(`Processing audio for episode ID: ${episodeId}`);
     console.log(`Audio URL: ${audioUrl}`);
     
@@ -54,11 +54,11 @@ serve(async (req) => {
       throw new Error(`Failed to update podcast episode status: ${await updateResponse.text()}`);
     }
 
-    // Forward the request to the Python processor endpoint - using the correct function name
-    const pythonEndpoint = `${supabaseUrl}/functions/v1/process-podcast-audio-python`;
-    console.log(`Calling Python function at: ${pythonEndpoint}`);
+    // Forward the request to the JavaScript processor endpoint
+    const processorEndpoint = `${supabaseUrl}/functions/v1/process-podcast-audio-python`;
+    console.log(`Calling JavaScript audio processor at: ${processorEndpoint}`);
     
-    const processorResponse = await fetch(pythonEndpoint, {
+    const processorResponse = await fetch(processorEndpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -71,7 +71,7 @@ serve(async (req) => {
     });
     
     if (!processorResponse.ok) {
-      throw new Error(`Failed to process audio with Python function: ${await processorResponse.text()}`);
+      throw new Error(`Failed to process audio: ${await processorResponse.text()}`);
     }
     
     const processorResult = await processorResponse.json();

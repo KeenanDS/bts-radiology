@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { format } from "date-fns";
 import { 
@@ -14,7 +13,8 @@ import {
   Star,
   Loader2,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Upload
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PodcastEpisode } from "./PodcastHistory";
@@ -47,7 +47,6 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     }
   };
   
-  // Determine which audio URL to use (processed or raw)
   const audioToUse = episode.processed_audio_url || episode.audio_url;
   
   const getStatusBadge = () => {
@@ -89,28 +88,28 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     switch (episode.audio_processing_status) {
       case "completed":
         return (
-          <div className="flex items-center text-green-400 text-xs font-medium ml-2">
+          <div className="flex items-center text-green-400 text-xs font-medium ml-2" title="Background music has been added to this podcast">
             <Check className="h-3 w-3 mr-1" />
             Music Added
           </div>
         );
       case "processing":
         return (
-          <div className="flex items-center text-blue-400 text-xs font-medium ml-2">
+          <div className="flex items-center text-blue-400 text-xs font-medium ml-2" title="Currently adding background music">
             <Loader2 className="h-3 w-3 mr-1 animate-spin" />
             Adding Music
           </div>
         );
       case "pending":
         return (
-          <div className="flex items-center text-yellow-400 text-xs font-medium ml-2">
+          <div className="flex items-center text-yellow-400 text-xs font-medium ml-2" title="Background music will be added soon">
             <Clock className="h-3 w-3 mr-1" />
             Music Pending
           </div>
         );
       case "error":
         return (
-          <div className="flex items-center text-red-400 text-xs font-medium ml-2">
+          <div className="flex items-center text-red-400 text-xs font-medium ml-2" title={episode.audio_processing_error || "Error adding background music"}>
             <AlertCircle className="h-3 w-3 mr-1" />
             Music Error
           </div>
@@ -236,7 +235,6 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
         description: "Podcast audio generation initiated successfully!",
       });
       
-      // Start polling for updates
       pollForAudioProcessingStatus(episode.id);
       
     } catch (error) {
@@ -264,6 +262,15 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     setIsProcessingAudio(true);
     
     try {
+      const setupResponse = await supabase.functions.invoke(
+        "setup-podcast-buckets",
+        {}
+      );
+      
+      if (!setupResponse.data?.success) {
+        throw new Error("Failed to set up storage buckets for podcast processing");
+      }
+      
       toast({
         title: "Processing Audio",
         description: "Adding background music to podcast audio. This may take a few minutes...",
@@ -292,7 +299,6 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
         description: "Background music processing initiated successfully!",
       });
       
-      // Start polling for updates
       pollForAudioProcessingStatus(episode.id);
       
     } catch (error) {
@@ -307,9 +313,60 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     }
   };
 
-  // Function to poll for audio processing status updates
+  const handleUploadBackgroundMusic = async () => {
+    try {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'audio/mpeg,audio/mp3';
+      fileInput.click();
+      
+      fileInput.onchange = async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        
+        toast({
+          title: "Uploading Music",
+          description: "Uploading background music file...",
+        });
+        
+        const setupResponse = await supabase.functions.invoke(
+          "setup-podcast-buckets",
+          {}
+        );
+        
+        if (!setupResponse.data?.success) {
+          throw new Error("Failed to set up storage buckets");
+        }
+        
+        const { data: uploadData, error: uploadError } = await supabase
+          .storage
+          .from("podcast_music")
+          .upload("default_background.mp3", file, {
+            contentType: "audio/mpeg",
+            upsert: true,
+          });
+          
+        if (uploadError) {
+          throw uploadError;
+        }
+        
+        toast({
+          title: "Success",
+          description: "Background music uploaded successfully! You can now add it to podcasts.",
+        });
+      };
+    } catch (error) {
+      console.error("Error uploading background music:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to upload background music",
+        variant: "destructive",
+      });
+    }
+  };
+
   const pollForAudioProcessingStatus = async (episodeId: string) => {
-    const maxAttempts = 30; // Max number of attempts (5 minutes total with 10-second intervals)
+    const maxAttempts = 30;
     let attempts = 0;
     
     const pollInterval = setInterval(async () => {
@@ -328,7 +385,6 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
           return;
         }
         
-        // Check if processing is complete or failed
         if (data.audio_processing_status === 'completed' || 
             data.audio_processing_status === 'error' || 
             attempts >= maxAttempts) {
@@ -362,9 +418,8 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
         console.error("Error in polling:", error);
         clearInterval(pollInterval);
       }
-    }, 10000); // Poll every 10 seconds
+    }, 10000);
     
-    // Store the interval ID to clear it if the component unmounts
     return () => clearInterval(pollInterval);
   };
 
@@ -500,11 +555,10 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
                 showDownload={true}
               />
               
-              {/* Show button to process audio with background music if only raw audio exists */}
-              {canProcessAudio && (
+              <div className="flex flex-col gap-2 mt-2">
                 <Button 
                   onClick={handleProcessAudio}
-                  className="w-full mt-2 bg-blue-600/30 hover:bg-blue-700/40 text-white"
+                  className="w-full bg-blue-600/30 hover:bg-blue-700/40 text-white"
                   disabled={isProcessingAudio}
                 >
                   {isProcessingAudio ? (
@@ -519,7 +573,16 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
                     </>
                   )}
                 </Button>
-              )}
+                
+                <Button
+                  onClick={handleUploadBackgroundMusic}
+                  variant="outline"
+                  className="w-full border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload Custom Background Music
+                </Button>
+              </div>
               
               {episode.audio_processing_error && (
                 <div className="mt-2 p-3 bg-red-900/20 border border-red-900/30 rounded-md">
@@ -529,27 +592,38 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
                   </div>
                   <p className="text-gray-300 text-xs mt-1">{episode.audio_processing_error}</p>
                   
-                  {/* Retry button for failed processing */}
-                  {episode.audio_url && episode.audio_processing_status === "error" && (
-                    <Button 
-                      onClick={handleProcessAudio}
-                      className="mt-2 bg-red-900/30 hover:bg-red-800/40 text-white text-xs py-1 h-7"
-                      disabled={isProcessingAudio}
+                  <div className="flex flex-col gap-2 mt-2">
+                    {episode.audio_url && episode.audio_processing_status === "error" && (
+                      <Button 
+                        onClick={handleProcessAudio}
+                        className="w-full bg-red-900/30 hover:bg-red-800/40 text-white text-xs py-1 h-7"
+                        disabled={isProcessingAudio}
+                        size="sm"
+                      >
+                        {isProcessingAudio ? (
+                          <>
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                            Retrying...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="mr-1 h-3 w-3" />
+                            Retry Adding Music
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    
+                    <Button
+                      onClick={handleUploadBackgroundMusic}
+                      variant="outline"
                       size="sm"
+                      className="w-full border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d] text-xs py-1 h-7"
                     >
-                      {isProcessingAudio ? (
-                        <>
-                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                          Retrying...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="mr-1 h-3 w-3" />
-                          Retry Adding Music
-                        </>
-                      )}
+                      <Upload className="mr-1 h-3 w-3" />
+                      Upload Background Music File
                     </Button>
-                  )}
+                  </div>
                 </div>
               )}
             </div>
