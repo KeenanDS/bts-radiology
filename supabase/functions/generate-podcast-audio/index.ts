@@ -190,8 +190,10 @@ serve(async (req) => {
       .from("podcast_episodes")
       .update({
         audio_url: audioUrl,
-        status: "processing_audio", // New status for audio processing
+        status: "processing_audio", // Set status to processing_audio
         updated_at: new Date().toISOString(),
+        // Explicitly set these fields to ensure proper processing
+        audio_processing_status: "pending", // Mark as pending for processing
       })
       .eq("id", episodeId);
 
@@ -229,20 +231,15 @@ serve(async (req) => {
             updated_at: new Date().toISOString(),
           })
           .eq("id", episodeId);
-      } else {
-        const processingResult = await processingResponse.json();
-        
-        // Update with the processed audio URL
-        await supabase
-          .from("podcast_episodes")
-          .update({
-            status: "completed",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", episodeId);
           
-        console.log("Audio processing completed successfully");
+        throw new Error(`Failed to process audio: ${errorText}`);
       }
+      
+      const processingResult = await processingResponse.json();
+      console.log("Audio processing initiated successfully:", processingResult);
+      
+      // We'll set the final status update to completed in the process-podcast-audio function
+      
     } catch (processingError) {
       console.error(`Error processing audio: ${processingError.message}`);
       
@@ -257,6 +254,8 @@ serve(async (req) => {
           updated_at: new Date().toISOString(),
         })
         .eq("id", episodeId);
+        
+      // We still consider the function a success since we have the raw audio
     }
 
     return new Response(
@@ -264,6 +263,7 @@ serve(async (req) => {
         success: true,
         episodeId,
         audioUrl,
+        message: "Audio generated and processing with background music initiated",
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

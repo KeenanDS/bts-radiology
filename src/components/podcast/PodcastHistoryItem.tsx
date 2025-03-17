@@ -13,7 +13,8 @@ import {
   Trash2,
   Star,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PodcastEpisode } from "./PodcastHistory";
@@ -35,6 +36,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSettingFeatured, setIsSettingFeatured] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const { toast } = useToast();
   
   const formatDate = (dateString: string) => {
@@ -97,6 +99,13 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
           <div className="flex items-center text-blue-400 text-xs font-medium ml-2">
             <Loader2 className="h-3 w-3 mr-1 animate-spin" />
             Adding Music
+          </div>
+        );
+      case "pending":
+        return (
+          <div className="flex items-center text-yellow-400 text-xs font-medium ml-2">
+            <Clock className="h-3 w-3 mr-1" />
+            Music Pending
           </div>
         );
       case "error":
@@ -224,12 +233,12 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
 
       toast({
         title: "Success",
-        description: "Podcast audio generated successfully!",
+        description: "Podcast audio generation initiated successfully!",
       });
       
-      if (onRefresh) {
-        onRefresh();
-      }
+      // Start polling for updates
+      pollForAudioProcessingStatus(episode.id);
+      
     } catch (error) {
       console.error("Error generating podcast audio:", error);
       toast({
@@ -242,13 +251,135 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     }
   };
 
+  const handleProcessAudio = async () => {
+    if (!episode.id || !episode.audio_url) {
+      toast({
+        title: "Error",
+        description: "Episode ID or audio URL is missing",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessingAudio(true);
+    
+    try {
+      toast({
+        title: "Processing Audio",
+        description: "Adding background music to podcast audio. This may take a few minutes...",
+      });
+
+      const { data, error } = await supabase.functions.invoke(
+        "process-podcast-audio",
+        {
+          body: { 
+            episodeId: episode.id,
+            audioUrl: episode.audio_url
+          },
+        }
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data || !data.success) {
+        throw new Error(data?.error || "Failed to process podcast audio");
+      }
+
+      toast({
+        title: "Success",
+        description: "Background music processing initiated successfully!",
+      });
+      
+      // Start polling for updates
+      pollForAudioProcessingStatus(episode.id);
+      
+    } catch (error) {
+      console.error("Error processing podcast audio:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to process podcast audio",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessingAudio(false);
+    }
+  };
+
+  // Function to poll for audio processing status updates
+  const pollForAudioProcessingStatus = async (episodeId: string) => {
+    const maxAttempts = 30; // Max number of attempts (5 minutes total with 10-second intervals)
+    let attempts = 0;
+    
+    const pollInterval = setInterval(async () => {
+      attempts++;
+      
+      try {
+        const { data, error } = await supabase
+          .from("podcast_episodes")
+          .select("*")
+          .eq("id", episodeId)
+          .single();
+          
+        if (error) {
+          console.error("Error polling episode status:", error);
+          clearInterval(pollInterval);
+          return;
+        }
+        
+        // Check if processing is complete or failed
+        if (data.audio_processing_status === 'completed' || 
+            data.audio_processing_status === 'error' || 
+            attempts >= maxAttempts) {
+          
+          clearInterval(pollInterval);
+          
+          if (onRefresh) {
+            onRefresh();
+          }
+          
+          if (data.audio_processing_status === 'completed') {
+            toast({
+              title: "Processing Complete",
+              description: "Podcast audio with background music is now available!",
+            });
+          } else if (data.audio_processing_status === 'error') {
+            toast({
+              title: "Processing Error",
+              description: data.audio_processing_error || "An error occurred while processing the audio",
+              variant: "destructive",
+            });
+          } else if (attempts >= maxAttempts) {
+            toast({
+              title: "Processing Timeout",
+              description: "The audio processing is taking longer than expected. Check back later.",
+              variant: "destructive",
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error in polling:", error);
+        clearInterval(pollInterval);
+      }
+    }, 10000); // Poll every 10 seconds
+    
+    // Store the interval ID to clear it if the component unmounts
+    return () => clearInterval(pollInterval);
+  };
+
   const scriptPreview = episode.podcast_script 
     ? episode.podcast_script.slice(0, 150) + (episode.podcast_script.length > 150 ? "..." : "")
     : "No script available";
 
   const canGenerateAudio = episode.podcast_script && 
-                          !audioToUse && 
+                          !episode.audio_url && 
                           episode.status === "completed";
+                          
+  const canProcessAudio = episode.audio_url && 
+                         !episode.processed_audio_url && 
+                         episode.status === "completed" &&
+                         episode.audio_processing_status !== "processing";
 
   return (
     <Collapsible 
@@ -369,6 +500,27 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
                 showDownload={true}
               />
               
+              {/* Show button to process audio with background music if only raw audio exists */}
+              {canProcessAudio && (
+                <Button 
+                  onClick={handleProcessAudio}
+                  className="w-full mt-2 bg-blue-600/30 hover:bg-blue-700/40 text-white"
+                  disabled={isProcessingAudio}
+                >
+                  {isProcessingAudio ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Adding Background Music...
+                    </>
+                  ) : (
+                    <>
+                      <Music className="mr-2 h-4 w-4" />
+                      Add Background Music
+                    </>
+                  )}
+                </Button>
+              )}
+              
               {episode.audio_processing_error && (
                 <div className="mt-2 p-3 bg-red-900/20 border border-red-900/30 rounded-md">
                   <div className="flex items-center text-red-400 text-xs font-medium">
@@ -376,6 +528,28 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
                     Error adding background music
                   </div>
                   <p className="text-gray-300 text-xs mt-1">{episode.audio_processing_error}</p>
+                  
+                  {/* Retry button for failed processing */}
+                  {episode.audio_url && episode.audio_processing_status === "error" && (
+                    <Button 
+                      onClick={handleProcessAudio}
+                      className="mt-2 bg-red-900/30 hover:bg-red-800/40 text-white text-xs py-1 h-7"
+                      disabled={isProcessingAudio}
+                      size="sm"
+                    >
+                      {isProcessingAudio ? (
+                        <>
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          Retrying...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="mr-1 h-3 w-3" />
+                          Retry Adding Music
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
               )}
             </div>

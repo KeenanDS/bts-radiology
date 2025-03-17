@@ -26,8 +26,6 @@ serve(async (req) => {
     }
 
     // Call the Python function
-    // In a real implementation, we would use the Supabase Python Runtime
-    // For now, we'll indicate that this is a placeholder
     console.log(`Processing audio for episode ID: ${episodeId}`);
     console.log(`Audio URL: ${audioUrl}`);
     
@@ -55,16 +53,26 @@ serve(async (req) => {
     if (!updateResponse.ok) {
       throw new Error(`Failed to update podcast episode status: ${await updateResponse.text()}`);
     }
+
+    // Forward the request to the Python processor endpoint
+    const pythonEndpoint = `${supabaseUrl}/functions/v1/process-podcast-audio-python`;
+    const processorResponse = await fetch(pythonEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({
+        episodeId,
+        audioUrl
+      })
+    });
     
-    // NOTE: In production, this would call the Python function
-    // For now, we're simulating the audio processing logic in Deno
+    if (!processorResponse.ok) {
+      throw new Error(`Failed to process audio with Python function: ${await processorResponse.text()}`);
+    }
     
-    // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // For demonstration, we'll just return the original URL as the processed URL
-    // In production, this would be replaced with the actual processed audio URL
-    const processedAudioUrl = audioUrl;
+    const processorResult = await processorResponse.json();
     
     // Update the episode with the processed URL
     const finalUpdateResponse = await fetch(
@@ -78,8 +86,9 @@ serve(async (req) => {
           "Prefer": "return=minimal",
         },
         body: JSON.stringify({
-          processed_audio_url: processedAudioUrl,
-          audio_processing_status: "completed"
+          processed_audio_url: processorResult.processedAudioUrl,
+          audio_processing_status: "completed",
+          status: "completed"
         })
       }
     );
@@ -92,7 +101,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         episodeId,
-        processedAudioUrl,
+        processedAudioUrl: processorResult.processedAudioUrl,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -100,6 +109,35 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error(`Error in process-podcast-audio: ${error.message}`);
+    
+    // Try to update the podcast episode with the error
+    try {
+      const { episodeId } = await req.json();
+      if (episodeId) {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+        
+        await fetch(
+          `${supabaseUrl}/rest/v1/podcast_episodes?id=eq.${episodeId}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseServiceKey}`,
+              "apikey": supabaseServiceKey,
+              "Prefer": "return=minimal",
+            },
+            body: JSON.stringify({
+              audio_processing_status: "error",
+              audio_processing_error: error.message,
+              status: "completed"  // Still mark as completed since we have the raw audio
+            })
+          }
+        );
+      }
+    } catch (updateError) {
+      console.error(`Failed to update episode with error status: ${updateError.message}`);
+    }
     
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
