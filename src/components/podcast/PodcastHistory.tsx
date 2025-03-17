@@ -18,6 +18,7 @@ export interface PodcastEpisode {
   audio_processing_status?: string;
   audio_processing_error?: string;
   processed_audio_url?: string;
+  background_music_url?: string;
 }
 
 const PodcastHistory = () => {

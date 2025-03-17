@@ -7,7 +7,6 @@ import { DEFAULT_BACKGROUND_MUSIC } from "../constants.ts";
 // Environment variables
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const elevenLabsApiKey = Deno.env.get("ELEVENLABS_API_KEY");
 
 // Initialize Supabase client
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -19,21 +18,6 @@ serve(async (req) => {
   }
 
   try {
-    // Check if ElevenLabs API key is available
-    if (!elevenLabsApiKey) {
-      console.error("Missing ELEVENLABS_API_KEY");
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: "Server configuration error: Missing ElevenLabs API key",
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
     // Parse request
     const { episodeId } = await req.json();
     
@@ -97,45 +81,57 @@ serve(async (req) => {
     }
 
     // Get background music URL from podcast_music bucket
+    console.log(`Getting background music file: ${DEFAULT_BACKGROUND_MUSIC}`);
     const { data: backgroundMusicData } = await supabase
       .storage
       .from("podcast_music")
       .getPublicUrl(DEFAULT_BACKGROUND_MUSIC);
 
     if (!backgroundMusicData?.publicUrl) {
-      await updateEpisodeWithError(episodeId, `Background music file '${DEFAULT_BACKGROUND_MUSIC}' not found`);
-      return errorResponse(`Background music file '${DEFAULT_BACKGROUND_MUSIC}' not found`);
+      const errorMsg = `Background music file '${DEFAULT_BACKGROUND_MUSIC}' not found`;
+      console.error(errorMsg);
+      await updateEpisodeWithError(episodeId, errorMsg);
+      return errorResponse(errorMsg);
     }
 
     const backgroundMusicUrl = backgroundMusicData.publicUrl;
     console.log(`Using background music: ${backgroundMusicUrl}`);
 
     try {
-      // Since we can't use FFmpeg directly, we'll create a new file with metadata 
-      // that indicates it should be played with background music
+      // Download the narration audio
       console.log(`Downloading narration audio from ${episode.audio_url}`);
       const narrationResponse = await fetch(episode.audio_url);
       if (!narrationResponse.ok) {
         throw new Error(`Failed to download narration audio: ${narrationResponse.status}`);
       }
       
-      // Get the narration audio as a blob
-      const narrationBlob = await narrationResponse.blob();
+      // Download the background music
+      console.log(`Downloading background music from ${backgroundMusicUrl}`);
+      const backgroundMusicResponse = await fetch(backgroundMusicUrl);
+      if (!backgroundMusicResponse.ok) {
+        throw new Error(`Failed to download background music: ${backgroundMusicResponse.status}`);
+      }
+      
+      // Since we can't use FFmpeg directly in Deno Deploy, we'll create a mixed audio URL
+      // that includes metadata about the background music, so the frontend can handle the mixing
+      
+      // Get narration as array buffer for manipulation
+      const narrationArrayBuffer = await narrationResponse.arrayBuffer();
       
       // Create a timestamp-based filename for the processed file
       const timestamp = new Date().toISOString().replace(/[-:.]/g, "");
       const outputFileName = `podcast_${episodeId}_processed_${timestamp}.mp3`;
       const filePath = `podcast_audio/${outputFileName}`;
       
-      // Create a File object from the blob
+      // Create a File object from the array buffer
       const audioFile = new File(
-        [narrationBlob], 
+        [narrationArrayBuffer], 
         outputFileName, 
         { type: "audio/mpeg" }
       );
       
       // Upload the processed audio file
-      console.log(`Uploading processed audio file to ${filePath}`);
+      console.log(`Uploading narration file to ${filePath}`);
       const { error: uploadError } = await supabase
         .storage
         .from("podcast_audio")
@@ -145,7 +141,7 @@ serve(async (req) => {
         });
 
       if (uploadError) {
-        throw new Error(`Failed to upload processed audio file: ${uploadError.message}`);
+        throw new Error(`Failed to upload narration file: ${uploadError.message}`);
       }
 
       // Get public URL for the uploaded file
@@ -155,12 +151,13 @@ serve(async (req) => {
         .getPublicUrl(filePath);
 
       const processedAudioUrl = publicUrlData.publicUrl;
-
-      // Update the episode with the processed audio URL
+      
+      // Store both URLs in the database so the frontend can handle the mixing
       await supabase
         .from("podcast_episodes")
         .update({
           processed_audio_url: processedAudioUrl,
+          background_music_url: backgroundMusicUrl, // Store the background music URL
           audio_processing_status: "completed",
           updated_at: new Date().toISOString(),
         })
