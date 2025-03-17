@@ -6,6 +6,10 @@ import { corsHeaders } from "../_shared/cors.ts";
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const elevenLabsApiKey = Deno.env.get("ELEVENLABS_API_KEY");
+// Add your audio processing API URL as an environment variable
+const audioProcessorUrl = Deno.env.get("AUDIO_PROCESSOR_URL") ?? "http://your-audio-processor-url.com";
+// Default background music URL (you could store this in a config table in Supabase)
+const defaultBackgroundMusic = Deno.env.get("DEFAULT_BACKGROUND_MUSIC") ?? "https://your-storage.com/default-background.mp3";
 
 // Initialize Supabase client
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -132,13 +136,16 @@ serve(async (req) => {
     
     // Generate a filename for the audio file
     const timestamp = new Date().toISOString().replace(/[-:.]/g, "");
+    const rawFilename = `raw_podcast_${episodeId}_${timestamp}.mp3`;
+    const rawFilePath = `podcast_audio/raw/${rawFilename}`;
+    
     const filename = `podcast_${episodeId}_${timestamp}.mp3`;
     const filePath = `podcast_audio/${filename}`;
     
     // Create a File object from the array buffer
     const audioFile = new File(
       [audioArrayBuffer], 
-      filename, 
+      rawFilename, 
       { type: "audio/mpeg" }
     );
 
@@ -162,21 +169,86 @@ serve(async (req) => {
       }
     }
 
-    // Upload audio file to Supabase Storage
-    console.log(`Uploading audio file: ${filePath}`);
+    // Upload raw audio file to Supabase Storage
+    console.log(`Uploading raw audio file: ${rawFilePath}`);
     const { error: uploadError } = await supabase
       .storage
       .from("podcast_audio")
-      .upload(filePath, audioFile, {
+      .upload(rawFilePath, audioFile, {
         contentType: "audio/mpeg",
         upsert: true,
       });
 
     if (uploadError) {
-      throw new Error(`Failed to upload audio file: ${uploadError.message}`);
+      throw new Error(`Failed to upload raw audio file: ${uploadError.message}`);
     }
 
-    // Get public URL for the uploaded file
+    // Get public URL for the raw uploaded file
+    const { data: rawPublicUrlData } = supabase
+      .storage
+      .from("podcast_audio")
+      .getPublicUrl(rawFilePath);
+
+    const rawAudioUrl = rawPublicUrlData.publicUrl;
+
+    // Update episode status to processing audio
+    await supabase
+      .from("podcast_episodes")
+      .update({
+        status: "adding_background_music",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", episodeId);
+
+    // Add background music using our Python service
+    console.log("Adding background music...");
+    
+    // Get background music URL - could come from the episode settings or use default
+    const backgroundMusicUrl = episode.background_music_url || defaultBackgroundMusic;
+    
+    // Call the audio processing service to add background music
+    const audioProcessingResponse = await fetch(`${audioProcessorUrl}/mix-audio/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        audio_url: rawAudioUrl,
+        background_music_url: backgroundMusicUrl,
+        // You can add other parameters here like intro_duration, outro_duration, etc.
+      }),
+    });
+
+    if (!audioProcessingResponse.ok) {
+      const errorText = await audioProcessingResponse.text();
+      throw new Error(`Audio processing error: ${audioProcessingResponse.status} - ${errorText}`);
+    }
+
+    // For now, assume service returns the processed audio as binary
+    const processedAudioArrayBuffer = await audioProcessingResponse.arrayBuffer();
+    
+    // Create a File object from the processed audio array buffer
+    const processedAudioFile = new File(
+      [processedAudioArrayBuffer], 
+      filename, 
+      { type: "audio/mpeg" }
+    );
+
+    // Upload processed audio file to Supabase Storage
+    console.log(`Uploading processed audio file: ${filePath}`);
+    const { error: processedUploadError } = await supabase
+      .storage
+      .from("podcast_audio")
+      .upload(filePath, processedAudioFile, {
+        contentType: "audio/mpeg",
+        upsert: true,
+      });
+
+    if (processedUploadError) {
+      throw new Error(`Failed to upload processed audio file: ${processedUploadError.message}`);
+    }
+
+    // Get public URL for the processed uploaded file
     const { data: publicUrlData } = supabase
       .storage
       .from("podcast_audio")
@@ -184,7 +256,7 @@ serve(async (req) => {
 
     const audioUrl = publicUrlData.publicUrl;
 
-    // Update the episode with the audio URL
+    // Update the episode with the final audio URL
     await supabase
       .from("podcast_episodes")
       .update({
