@@ -15,6 +15,12 @@ from pathlib import Path
 # Define path to background music file
 BACKGROUND_MUSIC_FILE = Path(__file__).parent / "assets" / "default_background.mp3"
 
+# Define the Supabase storage configuration model
+class SupabaseConfig(BaseModel):
+    supabase_url: Optional[str] = None
+    supabase_key: Optional[str] = None
+    episode_id: Optional[str] = None
+
 # Define the input model for the mix-audio endpoint
 class AudioMixRequest(BaseModel):
     audio_url: str
@@ -24,12 +30,7 @@ class AudioMixRequest(BaseModel):
     background_volume: float = -10
     storage_bucket: str = "podcast_audio"
     filename_prefix: str = "processed_"
-
-# Define the Supabase storage configuration model
-class SupabaseConfig(BaseModel):
-    supabase_url: Optional[str] = None
-    supabase_key: Optional[str] = None
-    episode_id: Optional[str] = None
+    supabase_config: Optional[SupabaseConfig] = None
 
 app = FastAPI(title="Podcast Audio Mixer")
 
@@ -48,8 +49,7 @@ def read_root():
 
 @app.post("/mix-audio/")
 async def mix_audio(
-    request: AudioMixRequest,
-    supabase_config: Optional[SupabaseConfig] = Body(None)
+    request: AudioMixRequest
 ):
     """
     Mix podcast audio with background music
@@ -61,7 +61,6 @@ async def mix_audio(
     try:
         # Log the received request for debugging
         print(f"Received request: {request}")
-        print(f"Received Supabase config: {supabase_config}")
         
         # Create temp directory
         temp_dir = tempfile.mkdtemp()
@@ -116,12 +115,12 @@ async def mix_audio(
         
         # Generate a unique filename
         timestamp = requests.get("http://worldtimeapi.org/api/timezone/Etc/UTC").json()["datetime"].replace(":", "").replace("-", "").replace(".", "")[:14]
-        episode_id_part = f"_{supabase_config.episode_id}" if supabase_config and supabase_config.episode_id else ""
+        episode_id_part = f"_{request.supabase_config.episode_id}" if request.supabase_config and request.supabase_config.episode_id else ""
         filename = f"{request.filename_prefix}{timestamp}{episode_id_part}.mp3"
         
         # Check if we have Supabase credentials to upload the file
         processed_audio_url = None
-        if supabase_config and supabase_config.supabase_url and supabase_config.supabase_key:
+        if request.supabase_config and request.supabase_config.supabase_url and request.supabase_config.supabase_key:
             try:
                 print(f"Uploading processed audio to Supabase storage bucket: {request.storage_bucket}")
                 
@@ -132,11 +131,11 @@ async def mix_audio(
                 with open(output_path, "rb") as file:
                     file_content = file.read()
                     
-                upload_url = f"{supabase_config.supabase_url}/storage/v1/object/{request.storage_bucket}/{file_path}"
+                upload_url = f"{request.supabase_config.supabase_url}/storage/v1/object/{request.storage_bucket}/{file_path}"
                 
                 headers = {
-                    "Authorization": f"Bearer {supabase_config.supabase_key}",
-                    "apikey": supabase_config.supabase_key,
+                    "Authorization": f"Bearer {request.supabase_config.supabase_key}",
+                    "apikey": request.supabase_config.supabase_key,
                     "Content-Type": "audio/mpeg"
                 }
                 
@@ -151,7 +150,7 @@ async def mix_audio(
                     raise Exception(f"Failed to upload to Supabase: {upload_response.text}")
                 
                 # Get the public URL
-                processed_audio_url = f"{supabase_config.supabase_url}/storage/v1/object/public/{request.storage_bucket}/{file_path}"
+                processed_audio_url = f"{request.supabase_config.supabase_url}/storage/v1/object/public/{request.storage_bucket}/{file_path}"
                 print(f"Uploaded successfully. Public URL: {processed_audio_url}")
             except Exception as upload_error:
                 print(f"Error uploading to Supabase: {str(upload_error)}")
