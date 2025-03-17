@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, Body
 import uvicorn
 from pydub import AudioSegment
@@ -11,11 +10,15 @@ import json
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from pydantic import BaseModel
+from pathlib import Path
+
+# Define path to background music file
+BACKGROUND_MUSIC_FILE = Path(__file__).parent / "assets" / "default_background.mp3"
 
 # Define the input model for the mix-audio endpoint
 class AudioMixRequest(BaseModel):
     audio_url: str
-    background_music_url: str = "https://gbypnkiziennhzqbhqtr.supabase.co/storage/v1/object/public/podcast_music//default_background.mp3"
+    background_music_url: Optional[str] = None  # Optional now, we'll use local file by default
     intro_duration: int = 10000
     outro_duration: int = 10000
     background_volume: float = -10
@@ -67,9 +70,16 @@ async def mix_audio(
         podcast_path = os.path.join(temp_dir, "podcast.mp3")
         download_file(request.audio_url, podcast_path)
         
-        # Download background music
+        # Get background music
         music_path = os.path.join(temp_dir, "background.mp3")
-        download_file(request.background_music_url, music_path)
+        if request.background_music_url:
+            # Use provided URL if specified
+            download_file(request.background_music_url, music_path)
+        else:
+            # Use the local file
+            if not os.path.exists(BACKGROUND_MUSIC_FILE):
+                raise HTTPException(status_code=500, detail="Background music file not found")
+            shutil.copy(BACKGROUND_MUSIC_FILE, music_path)
         
         # Load audio files
         podcast = AudioSegment.from_mp3(podcast_path)
