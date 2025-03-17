@@ -54,8 +54,10 @@ serve(async (req) => {
       throw new Error(`Failed to update podcast episode status: ${await updateResponse.text()}`);
     }
 
-    // Forward the request to the Python processor endpoint
+    // Forward the request to the Python processor endpoint - using the correct function name
     const pythonEndpoint = `${supabaseUrl}/functions/v1/process-podcast-audio-python`;
+    console.log(`Calling Python function at: ${pythonEndpoint}`);
+    
     const processorResponse = await fetch(pythonEndpoint, {
       method: "POST",
       headers: {

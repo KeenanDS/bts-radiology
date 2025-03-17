@@ -68,3 +68,5 @@ verify_jwt = false
 verify_jwt = false
 [functions.process-podcast-audio]
 verify_jwt = false
+[functions.process-podcast-audio-python]
+verify_jwt = false
