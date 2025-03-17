@@ -6,6 +6,8 @@ import os
 import requests
 import tempfile
 import shutil
+import base64
+import json
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from pydantic import BaseModel
@@ -17,6 +19,14 @@ class AudioMixRequest(BaseModel):
     intro_duration: int = 10000
     outro_duration: int = 10000
     background_volume: float = -10
+    storage_bucket: str = "podcast_audio"
+    filename_prefix: str = "processed_"
+
+# Define the Supabase storage configuration model
+class SupabaseConfig(BaseModel):
+    supabase_url: Optional[str] = None
+    supabase_key: Optional[str] = None
+    episode_id: Optional[str] = None
 
 app = FastAPI(title="Podcast Audio Mixer")
 
@@ -35,13 +45,15 @@ def read_root():
 
 @app.post("/mix-audio/")
 async def mix_audio(
-    request: AudioMixRequest
+    request: AudioMixRequest,
+    supabase_config: Optional[SupabaseConfig] = Body(None)
 ):
     """
     Mix podcast audio with background music
     - Adds intro music with fade out
     - Keeps middle section as voice only
     - Adds outro music with fade in
+    - Uploads to Supabase storage if credentials provided
     """
     try:
         # Create temp directory
@@ -88,24 +100,64 @@ async def mix_audio(
         output_path = os.path.join(temp_dir, "mixed_podcast.mp3")
         result.export(output_path, format="mp3")
         
-        # Now the file is ready at output_path
-        # In a real-world scenario, you'd either:
-        # 1. Upload to cloud storage and return the URL, or
-        # 2. Return the file directly in the response
+        # Generate a unique filename
+        timestamp = requests.get("http://worldtimeapi.org/api/timezone/Etc/UTC").json()["datetime"].replace(":", "").replace("-", "").replace(".", "")[:14]
+        episode_id_part = f"_{supabase_config.episode_id}" if supabase_config and supabase_config.episode_id else ""
+        filename = f"{request.filename_prefix}{timestamp}{episode_id_part}.mp3"
         
-        # For this example, we'll just return a success message
-        # In reality, you'd implement file uploading to Supabase storage here
+        # Check if we have Supabase credentials to upload the file
+        processed_audio_url = None
+        if supabase_config and supabase_config.supabase_url and supabase_config.supabase_key:
+            try:
+                print(f"Uploading processed audio to Supabase storage bucket: {request.storage_bucket}")
+                
+                # Construct the file path in the storage bucket
+                file_path = f"processed/{filename}"
+                
+                # Upload to Supabase Storage
+                with open(output_path, "rb") as file:
+                    file_content = file.read()
+                    
+                upload_url = f"{supabase_config.supabase_url}/storage/v1/object/{request.storage_bucket}/{file_path}"
+                
+                headers = {
+                    "Authorization": f"Bearer {supabase_config.supabase_key}",
+                    "apikey": supabase_config.supabase_key,
+                    "Content-Type": "audio/mpeg"
+                }
+                
+                upload_response = requests.post(
+                    upload_url,
+                    headers=headers,
+                    data=file_content
+                )
+                
+                if upload_response.status_code >= 400:
+                    print(f"Supabase upload error: {upload_response.status_code} - {upload_response.text}")
+                    raise Exception(f"Failed to upload to Supabase: {upload_response.text}")
+                
+                # Get the public URL
+                processed_audio_url = f"{supabase_config.supabase_url}/storage/v1/object/public/{request.storage_bucket}/{file_path}"
+                print(f"Uploaded successfully. Public URL: {processed_audio_url}")
+            except Exception as upload_error:
+                print(f"Error uploading to Supabase: {str(upload_error)}")
+                # Continue execution even if upload fails, we'll return the processed file data
         
         # Clean up temp files
         shutil.rmtree(temp_dir)
         
-        return {
+        response_data = {
             "success": True,
             "message": "Audio successfully mixed with background music"
-            # In actual implementation, return URL to the processed file
         }
         
+        if processed_audio_url:
+            response_data["processed_audio_url"] = processed_audio_url
+        
+        return response_data
+        
     except Exception as e:
+        print(f"Error in mix_audio: {str(e)}")
         return {"success": False, "error": str(e)}
 
 def download_file(url, destination):
@@ -119,4 +171,4 @@ def download_file(url, destination):
             f.write(chunk)
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True) 
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

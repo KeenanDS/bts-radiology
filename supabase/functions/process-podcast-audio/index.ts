@@ -72,8 +72,8 @@ serve(async (req) => {
     // Get default background music from storage
     const defaultMusicUrl = `${supabaseUrl}/storage/v1/object/public/podcast_music/default_background.mp3`;
     
-    // Call the audio processor service
-    console.log("Calling external audio processor service...");
+    // Call the audio processor service with Supabase credentials for direct upload
+    console.log("Calling external audio processor service with Supabase credentials...");
     const processorResponse = await fetch(`${fullProcessorUrl}/mix-audio/`, {
       method: "POST",
       headers: {
@@ -84,7 +84,14 @@ serve(async (req) => {
         background_music_url: defaultMusicUrl,
         intro_duration: 8000,  // 8 seconds
         outro_duration: 8000,  // 8 seconds
-        background_volume: -12  // Lower volume for better voice clarity
+        background_volume: -12,  // Lower volume for better voice clarity
+        storage_bucket: "podcast_audio",
+        filename_prefix: `processed_${episodeId}_`,
+        supabase_config: {
+          supabase_url: supabaseUrl,
+          supabase_key: supabaseServiceKey,
+          episode_id: episodeId
+        }
       })
     });
     
@@ -100,13 +107,13 @@ serve(async (req) => {
       throw new Error(`Audio processor failed: ${processorResult.error || "Unknown error"}`);
     }
     
-    // Generate a unique filename for the processed audio
-    const timestamp = new Date().toISOString().replace(/[-:.]/g, "");
-    const filename = `processed_${episodeId}_${timestamp}.mp3`;
-    const filePath = `podcast_audio/${filename}`;
+    // Get the processed audio URL from the response, or use the original URL as fallback
+    const processedAudioUrl = processorResult.processed_audio_url || audioUrl;
     
     // Update the episode with the processed audio information
     console.log("Updating episode with processed audio information");
+    console.log(`Processed audio URL: ${processedAudioUrl}`);
+    
     const finalUpdateResponse = await fetch(
       `${supabaseUrl}/rest/v1/podcast_episodes?id=eq.${episodeId}`,
       {
@@ -118,7 +125,7 @@ serve(async (req) => {
           "Prefer": "return=minimal",
         },
         body: JSON.stringify({
-          processed_audio_url: audioUrl, // For now, use the original URL
+          processed_audio_url: processedAudioUrl,
           audio_processing_status: "completed",
           audio_processing_message: "Successfully processed audio with background music",
           status: "completed"
@@ -134,7 +141,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         episodeId,
-        processedAudioUrl: audioUrl,
+        processedAudioUrl,
         message: "Audio processed successfully with background music"
       }),
       {

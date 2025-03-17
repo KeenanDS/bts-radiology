@@ -191,7 +191,8 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     
     const link = document.createElement('a');
     link.href = audioToUse;
-    link.download = `podcast_episode_${episode.id}.mp3`;
+    const filename = episode.processed_audio_url ? 'podcast_with_music.mp3' : 'podcast_raw.mp3';
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -302,13 +303,13 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
         description: "Adding background music to podcast audio. This may take a few minutes...",
       });
 
-      // Call the generate-podcast-audio function and let it handle the processing directly
-      // This is safer than trying to call the external API ourselves
+      // Call the process-podcast-audio function directly
       const { data, error } = await supabase.functions.invoke(
-        "generate-podcast-audio",
+        "process-podcast-audio",
         {
           body: { 
-            episodeId: episode.id
+            episodeId: episode.id,
+            audioUrl: episode.audio_url
           },
         }
       );
@@ -690,7 +691,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
                       size="sm"
                       className="w-full border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d] text-xs py-1 h-7"
                     >
-                      <Upload className="mr-1 h-3 w-3" />
+                      <Upload className="mr-1 h-3 w-4" />
                       Upload Background Music File
                     </Button>
                   </div>
@@ -762,4 +763,3 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
 };
 
 export default PodcastHistoryItem;
-

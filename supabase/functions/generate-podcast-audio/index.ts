@@ -196,119 +196,45 @@ serve(async (req) => {
       })
       .eq("id", episodeId);
 
-    // Process the audio with the external audio processor service directly
-    console.log("Processing audio with external audio processor service...");
+    // Process the audio by calling the process-podcast-audio function 
+    console.log("Calling process-podcast-audio function to add background music...");
     
-    // Get the audio processor URL from environment variables
-    const audioProcessorUrl = Deno.env.get("AUDIO_PROCESSOR_URL");
-    
-    if (!audioProcessorUrl) {
-      console.error("AUDIO_PROCESSOR_URL environment variable is not set");
-      await supabase
-        .from("podcast_episodes")
-        .update({
-          status: "completed", // Still mark as completed since we have the raw audio
-          audio_processing_status: "error",
-          audio_processing_error: "AUDIO_PROCESSOR_URL environment variable is not set",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", episodeId);
-        
-      // We still consider this a success as we have the raw audio
-      return new Response(
-        JSON.stringify({
-          success: true,
-          episodeId,
-          audioUrl: rawAudioUrl,
-          message: "Raw audio generated successfully, but could not process with background music due to missing AUDIO_PROCESSOR_URL",
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-    
-    // Ensure URL has proper protocol
-    const fullProcessorUrl = audioProcessorUrl.startsWith("http") 
-      ? audioProcessorUrl 
-      : `https://${audioProcessorUrl}`;
-    
-    console.log(`Using audio processor at: ${fullProcessorUrl}`);
-    
-    // Update status to processing
-    await supabase
-      .from("podcast_episodes")
-      .update({
-        audio_processing_status: "processing",
-        audio_processing_message: "Sending to audio processor service..."
-      })
-      .eq("id", episodeId);
-
-    // Get default background music from storage
-    const { data: musicUrlData } = supabase
-      .storage
-      .from("podcast_music")
-      .getPublicUrl("default_background.mp3");
-    
-    const defaultMusicUrl = musicUrlData.publicUrl;
-    
-    console.log(`Background music URL: ${defaultMusicUrl}`);
-    
-    // Call the audio processor service directly
     try {
-      console.log("Calling external audio processor service...");
-      const processorResponse = await fetch(`${fullProcessorUrl}/mix-audio/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          audio_url: rawAudioUrl,
-          background_music_url: defaultMusicUrl,
-          intro_duration: 8000,  // 8 seconds
-          outro_duration: 8000,  // 8 seconds
-          background_volume: -12  // Lower volume for better voice clarity
-        })
-      });
+      const processResponse = await supabase.functions.invoke(
+        "process-podcast-audio",
+        {
+          body: { 
+            episodeId: episodeId,
+            audioUrl: rawAudioUrl
+          }
+        }
+      );
       
-      console.log(`Processor response status: ${processorResponse.status}`);
+      console.log("Process audio response:", processResponse);
       
-      if (!processorResponse.ok) {
-        const errorText = await processorResponse.text();
-        throw new Error(`Audio processor service error: ${processorResponse.status} - ${errorText}`);
+      if (processResponse.error) {
+        throw new Error(`Error invoking process-podcast-audio: ${processResponse.error.message}`);
       }
       
-      const processorResult = await processorResponse.json();
-      console.log("Audio processor result:", processorResult);
-      
-      if (!processorResult.success) {
-        throw new Error(`Audio processor failed: ${processorResult.error || "Unknown error"}`);
+      if (!processResponse.data || !processResponse.data.success) {
+        throw new Error(processResponse.data?.error || "Unknown error processing audio");
       }
-      
-      // Update the episode with the processed audio information
-      await supabase
-        .from("podcast_episodes")
-        .update({
-          processed_audio_url: rawAudioUrl, // For now, use the original URL
-          audio_processing_status: "completed",
-          audio_processing_message: "Successfully processed audio with background music",
-          status: "completed"
-        })
-        .eq("id", episodeId);
       
       return new Response(
         JSON.stringify({
           success: true,
           episodeId,
           audioUrl: rawAudioUrl,
-          message: "Audio generated and processed with background music successfully",
+          processedAudioUrl: processResponse.data.processedAudioUrl,
+          message: "Audio generated and processing with background music has been initiated"
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+      
     } catch (processingError) {
-      console.error(`Error processing audio: ${processingError.message}`);
+      console.error(`Error calling process-podcast-audio function: ${processingError.message}`);
       
       // Update the episode with the error but still mark as completed since we have the raw audio
       await supabase
