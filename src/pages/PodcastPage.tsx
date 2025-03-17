@@ -377,7 +377,6 @@ const PodcastPage = () => {
                   <CardContent className="flex justify-center">
                     <AudioPlayer 
                       audioUrl={audioUrl} 
-                      backgroundMusicUrl={backgroundMusicUrl || undefined}
                       title="Beyond the Scan"
                       subtitle="Latest Radiology News"
                     />

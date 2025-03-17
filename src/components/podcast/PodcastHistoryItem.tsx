@@ -78,14 +78,14 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
         return (
           <div className="flex items-center text-yellow-400 text-xs font-medium">
             <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-            Processing with background music
+            Processing with Dolby.io
           </div>
         );
       case "completed":
         return (
           <div className="flex items-center text-green-400 text-xs font-medium">
             <Check className="h-3 w-3 mr-1" />
-            Audio processed with background music
+            Enhanced with Dolby.io
           </div>
         );
       case "error":
@@ -191,7 +191,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     try {
       toast({
         title: "Processing Audio",
-        description: "Adding background music to podcast audio. This may take a few moments...",
+        description: "Enhancing podcast audio with Dolby.io. This may take a few minutes...",
       });
 
       const { data, error } = await supabase.functions.invoke(
@@ -211,7 +211,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
 
       toast({
         title: "Success",
-        description: "Podcast audio processed with background music!",
+        description: "Podcast audio enhanced with Dolby.io!",
       });
       
       if (onRefresh) {
@@ -439,12 +439,11 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
             <div className="mt-4">
               <div className="flex items-center text-gray-300 text-sm mb-2">
                 <Music className="h-4 w-4 mr-2" />
-                Processed Audio with Background Music
+                Enhanced Audio with Dolby.io
               </div>
               <AudioPlayer 
                 audioUrl={episode.processed_audio_url} 
-                backgroundMusicUrl={episode.background_music_url}
-                title={`Episode ${formatDate(episode.scheduled_for)} with Music`}
+                title={`Episode ${formatDate(episode.scheduled_for)} (Enhanced)`}
                 subtitle="Beyond the Scan"
                 showDownload={true}
               />
@@ -471,12 +470,12 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
                   {isProcessingAudio ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processing with Background Music...
+                      Enhancing Audio with Dolby.io...
                     </>
                   ) : (
                     <>
                       <Music className="mr-2 h-4 w-4" />
-                      Add Background Music
+                      Enhance with Dolby.io
                     </>
                   )}
                 </Button>
