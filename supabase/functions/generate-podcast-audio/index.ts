@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -189,10 +190,74 @@ serve(async (req) => {
       .from("podcast_episodes")
       .update({
         audio_url: audioUrl,
-        status: "completed",
+        status: "processing_audio", // New status for audio processing
         updated_at: new Date().toISOString(),
       })
       .eq("id", episodeId);
+
+    // Call the audio processing function to add background music
+    console.log("Calling process-podcast-audio function to add background music...");
+    
+    try {
+      const processingResponse = await fetch(
+        `${supabaseUrl}/functions/v1/process-podcast-audio`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            episodeId,
+            audioUrl,
+          }),
+        }
+      );
+      
+      if (!processingResponse.ok) {
+        const errorText = await processingResponse.text();
+        console.error(`Error calling audio processor: ${errorText}`);
+        
+        // Even if processing fails, we still have the raw audio
+        // Update the episode to completed status with the raw audio
+        await supabase
+          .from("podcast_episodes")
+          .update({
+            status: "completed",
+            audio_processing_status: "error",
+            audio_processing_error: `Failed to process audio: ${errorText}`,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", episodeId);
+      } else {
+        const processingResult = await processingResponse.json();
+        
+        // Update with the processed audio URL
+        await supabase
+          .from("podcast_episodes")
+          .update({
+            status: "completed",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", episodeId);
+          
+        console.log("Audio processing completed successfully");
+      }
+    } catch (processingError) {
+      console.error(`Error processing audio: ${processingError.message}`);
+      
+      // Even if processing fails, we still have the raw audio
+      // Update the episode to completed status with the raw audio
+      await supabase
+        .from("podcast_episodes")
+        .update({
+          status: "completed",
+          audio_processing_status: "error",
+          audio_processing_error: processingError.message,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", episodeId);
+    }
 
     return new Response(
       JSON.stringify({

@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { format } from "date-fns";
 import { 
@@ -11,7 +12,8 @@ import {
   Clock,
   Trash2,
   Star,
-  Loader2
+  Loader2,
+  AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PodcastEpisode } from "./PodcastHistory";
@@ -43,6 +45,9 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     }
   };
   
+  // Determine which audio URL to use (processed or raw)
+  const audioToUse = episode.processed_audio_url || episode.audio_url;
+  
   const getStatusBadge = () => {
     switch (episode.status) {
       case "completed":
@@ -56,7 +61,14 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
         return (
           <div className="flex items-center text-yellow-400 text-xs font-medium">
             <Clock className="h-3 w-3 mr-1 animate-pulse" />
-            Processing Audio
+            Generating Audio
+          </div>
+        );
+      case "processing_audio":
+        return (
+          <div className="flex items-center text-blue-400 text-xs font-medium">
+            <Clock className="h-3 w-3 mr-1 animate-pulse" />
+            Adding Background Music
           </div>
         );
       default:
@@ -66,6 +78,36 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
             {episode.status || "Pending"}
           </div>
         );
+    }
+  };
+  
+  const getProcessingStatusBadge = () => {
+    if (!episode.audio_processing_status) return null;
+    
+    switch (episode.audio_processing_status) {
+      case "completed":
+        return (
+          <div className="flex items-center text-green-400 text-xs font-medium ml-2">
+            <Check className="h-3 w-3 mr-1" />
+            Music Added
+          </div>
+        );
+      case "processing":
+        return (
+          <div className="flex items-center text-blue-400 text-xs font-medium ml-2">
+            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            Adding Music
+          </div>
+        );
+      case "error":
+        return (
+          <div className="flex items-center text-red-400 text-xs font-medium ml-2">
+            <AlertCircle className="h-3 w-3 mr-1" />
+            Music Error
+          </div>
+        );
+      default:
+        return null;
     }
   };
 
@@ -99,7 +141,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
   };
 
   const handleSetFeatured = async () => {
-    if (episode.status !== "completed" || !episode.audio_url) {
+    if (episode.status !== "completed" || !audioToUse) {
       toast({
         title: "Cannot set as featured",
         description: "Only completed episodes with audio can be featured",
@@ -137,10 +179,10 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
   };
 
   const handleDownloadAudio = () => {
-    if (!episode.audio_url) return;
+    if (!audioToUse) return;
     
     const link = document.createElement('a');
-    link.href = episode.audio_url;
+    link.href = audioToUse;
     link.download = `podcast_episode_${episode.id}.mp3`;
     document.body.appendChild(link);
     link.click();
@@ -162,7 +204,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     try {
       toast({
         title: "Generating Audio",
-        description: "Converting podcast script to audio. This may take a few minutes...",
+        description: "Converting podcast script to audio with background music. This may take a few minutes...",
       });
 
       const { data, error } = await supabase.functions.invoke(
@@ -205,7 +247,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     : "No script available";
 
   const canGenerateAudio = episode.podcast_script && 
-                          !episode.audio_url && 
+                          !audioToUse && 
                           episode.status === "completed";
 
   return (
@@ -230,10 +272,11 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
               {formatDate(episode.created_at)}
               <span className="mx-2">•</span>
               {getStatusBadge()}
+              {getProcessingStatusBadge()}
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {episode.audio_url && (
+            {audioToUse && (
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -244,7 +287,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
               </Button>
             )}
             
-            {episode.status === "completed" && episode.audio_url && (
+            {episode.status === "completed" && audioToUse && (
               <Button 
                 variant="outline" 
                 size="sm"
@@ -310,18 +353,31 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
       
       <CollapsibleContent>
         <div className="px-4 pb-4 space-y-4">
-          {episode.audio_url ? (
+          {audioToUse ? (
             <div className="mt-4">
               <div className="flex items-center text-gray-300 text-sm mb-2">
                 <Music className="h-4 w-4 mr-2" />
                 Audio Playback
+                {episode.processed_audio_url && (
+                  <span className="ml-2 text-xs text-green-400">(With Background Music)</span>
+                )}
               </div>
               <AudioPlayer 
-                audioUrl={episode.audio_url} 
+                audioUrl={audioToUse} 
                 title={`Episode ${formatDate(episode.scheduled_for)}`}
                 subtitle="Beyond the Scan"
                 showDownload={true}
               />
+              
+              {episode.audio_processing_error && (
+                <div className="mt-2 p-3 bg-red-900/20 border border-red-900/30 rounded-md">
+                  <div className="flex items-center text-red-400 text-xs font-medium">
+                    <AlertCircle className="h-3 w-3 mr-1" />
+                    Error adding background music
+                  </div>
+                  <p className="text-gray-300 text-xs mt-1">{episode.audio_processing_error}</p>
+                </div>
+              )}
             </div>
           ) : canGenerateAudio && (
             <div className="mt-4">
@@ -342,7 +398,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
                 ) : (
                   <>
                     <Music className="mr-2 h-4 w-4" />
-                    Generate Podcast Audio
+                    Generate Podcast Audio with Music
                   </>
                 )}
               </Button>
