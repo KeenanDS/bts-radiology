@@ -262,6 +262,8 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     setIsProcessingAudio(true);
     
     try {
+      // First ensure buckets exist
+      console.log("Setting up storage buckets...");
       const setupResponse = await supabase.functions.invoke(
         "setup-podcast-buckets",
         {}
@@ -278,6 +280,8 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
         description: "Adding background music to podcast audio. This may take a few minutes...",
       });
 
+      // Process the audio
+      console.log("Calling process-podcast-audio function...");
       const { data, error } = await supabase.functions.invoke(
         "process-podcast-audio",
         {
@@ -300,16 +304,24 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
 
       toast({
         title: "Success",
-        description: "Background music processing initiated successfully!",
+        description: data.message || "Background music processing initiated successfully!",
       });
       
       pollForAudioProcessingStatus(episode.id);
       
     } catch (error) {
       console.error("Error processing podcast audio:", error);
+      
+      let errorMessage = error instanceof Error ? error.message : "Failed to process podcast audio";
+      
+      // Handle specific cases
+      if (errorMessage.includes("background music")) {
+        errorMessage = "No background music file found. Please upload a background music file first.";
+      }
+      
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to process podcast audio",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -327,6 +339,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) return;
         
+        // Validate file type
         if (!file.type.match('audio/(mpeg|mp3)')) {
           toast({
             title: "Invalid File Type",
@@ -336,6 +349,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
           return;
         }
         
+        // Validate file size (50MB limit)
         if (file.size > 50 * 1024 * 1024) {
           toast({
             title: "File Too Large",
@@ -350,6 +364,8 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
           description: "Uploading background music file...",
         });
         
+        // Setup buckets first
+        console.log("Setting up storage buckets...");
         const setupResponse = await supabase.functions.invoke(
           "setup-podcast-buckets",
           {}
@@ -361,6 +377,8 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
           throw new Error("Failed to set up storage buckets");
         }
         
+        // Upload the file
+        console.log("Uploading background music file...");
         const { data: uploadData, error: uploadError } = await supabase
           .storage
           .from("podcast_music")
@@ -373,6 +391,14 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
           console.error("Upload error:", uploadError);
           throw uploadError;
         }
+        
+        // Get public URL for verification
+        const { data: publicUrlData } = supabase
+          .storage
+          .from("podcast_music")
+          .getPublicUrl("default_background.mp3");
+          
+        console.log("Music uploaded to:", publicUrlData.publicUrl);
         
         toast({
           title: "Success",
