@@ -210,6 +210,17 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     setIsGeneratingAudio(true);
     
     try {
+      // First ensure buckets exist
+      console.log("Setting up storage buckets...");
+      const setupResponse = await supabase.functions.invoke(
+        "setup-podcast-buckets",
+        {}
+      );
+      
+      if (!setupResponse.data?.success) {
+        throw new Error("Failed to set up storage buckets");
+      }
+      
       toast({
         title: "Generating Audio",
         description: "Converting podcast script to audio with background music. This may take a few minutes...",
@@ -275,19 +286,29 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
         throw new Error("Failed to set up storage buckets for podcast processing");
       }
       
+      const { data: musicExists } = await supabase
+        .storage
+        .from("podcast_music")
+        .list();
+        
+      const backgroundMusicExists = musicExists?.some(file => file.name === "default_background.mp3");
+      
+      if (!backgroundMusicExists) {
+        throw new Error("No background music file found. Please upload a background music file first.");
+      }
+      
       toast({
         title: "Processing Audio",
         description: "Adding background music to podcast audio. This may take a few minutes...",
       });
 
-      // Process the audio
-      console.log("Calling process-podcast-audio function...");
+      // Call the generate-podcast-audio function and let it handle the processing directly
+      // This is safer than trying to call the external API ourselves
       const { data, error } = await supabase.functions.invoke(
-        "process-podcast-audio",
+        "generate-podcast-audio",
         {
           body: { 
-            episodeId: episode.id,
-            audioUrl: episode.audio_url
+            episodeId: episode.id
           },
         }
       );
@@ -313,11 +334,6 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
       console.error("Error processing podcast audio:", error);
       
       let errorMessage = error instanceof Error ? error.message : "Failed to process podcast audio";
-      
-      // Handle specific cases
-      if (errorMessage.includes("background music")) {
-        errorMessage = "No background music file found. Please upload a background music file first.";
-      }
       
       toast({
         title: "Error",
@@ -349,11 +365,11 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
           return;
         }
         
-        // Validate file size (50MB limit)
-        if (file.size > 50 * 1024 * 1024) {
+        // Validate file size (10MB limit)
+        if (file.size > 10 * 1024 * 1024) {
           toast({
             title: "File Too Large",
-            description: "Maximum file size is 50MB.",
+            description: "Maximum file size is 10MB.",
             variant: "destructive",
           });
           return;
@@ -690,7 +706,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
               <Button 
                 onClick={handleGenerateAudio}
                 className="w-full bg-gradient-to-r from-[#3a3f7d] to-[#6366f1] hover:from-[#4a4f8d] hover:to-[#7376ff] text-white"
-                disabled={isGeneratingAudio}
+                disabled={isGeneratingAudio || !canGenerateAudio}
               >
                 {isGeneratingAudio ? (
                   <>
@@ -746,3 +762,4 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
 };
 
 export default PodcastHistoryItem;
+
