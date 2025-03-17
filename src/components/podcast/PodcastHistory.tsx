@@ -12,9 +12,6 @@ export interface PodcastEpisode {
   status: string;
   podcast_script: string | null;
   audio_url: string | null;
-  processed_audio_url: string | null;
-  audio_processing_status: string | null;
-  audio_processing_error: string | null;
   created_at: string;
   updated_at: string;
   is_featured: boolean;

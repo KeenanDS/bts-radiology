@@ -11,10 +11,7 @@ import {
   Clock,
   Trash2,
   Star,
-  Loader2,
-  AlertCircle,
-  RefreshCw,
-  Upload
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PodcastEpisode } from "./PodcastHistory";
@@ -36,7 +33,6 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSettingFeatured, setIsSettingFeatured] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
-  const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const { toast } = useToast();
   
   const formatDate = (dateString: string) => {
@@ -46,8 +42,6 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
       return "Invalid date";
     }
   };
-  
-  const audioToUse = episode.processed_audio_url || episode.audio_url;
   
   const getStatusBadge = () => {
     switch (episode.status) {
@@ -62,14 +56,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
         return (
           <div className="flex items-center text-yellow-400 text-xs font-medium">
             <Clock className="h-3 w-3 mr-1 animate-pulse" />
-            Generating Audio
-          </div>
-        );
-      case "processing_audio":
-        return (
-          <div className="flex items-center text-blue-400 text-xs font-medium">
-            <Clock className="h-3 w-3 mr-1 animate-pulse" />
-            Adding Background Music
+            Processing Audio
           </div>
         );
       default:
@@ -79,43 +66,6 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
             {episode.status || "Pending"}
           </div>
         );
-    }
-  };
-  
-  const getProcessingStatusBadge = () => {
-    if (!episode.audio_processing_status) return null;
-    
-    switch (episode.audio_processing_status) {
-      case "completed":
-        return (
-          <div className="flex items-center text-green-400 text-xs font-medium ml-2" title="Background music has been added to this podcast">
-            <Check className="h-3 w-3 mr-1" />
-            Music Added
-          </div>
-        );
-      case "processing":
-        return (
-          <div className="flex items-center text-blue-400 text-xs font-medium ml-2" title="Currently adding background music">
-            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-            Adding Music
-          </div>
-        );
-      case "pending":
-        return (
-          <div className="flex items-center text-yellow-400 text-xs font-medium ml-2" title="Background music will be added soon">
-            <Clock className="h-3 w-3 mr-1" />
-            Music Pending
-          </div>
-        );
-      case "error":
-        return (
-          <div className="flex items-center text-red-400 text-xs font-medium ml-2" title={episode.audio_processing_error || "Error adding background music"}>
-            <AlertCircle className="h-3 w-3 mr-1" />
-            Music Error
-          </div>
-        );
-      default:
-        return null;
     }
   };
 
@@ -149,7 +99,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
   };
 
   const handleSetFeatured = async () => {
-    if (episode.status !== "completed" || !audioToUse) {
+    if (episode.status !== "completed" || !episode.audio_url) {
       toast({
         title: "Cannot set as featured",
         description: "Only completed episodes with audio can be featured",
@@ -187,12 +137,11 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
   };
 
   const handleDownloadAudio = () => {
-    if (!audioToUse) return;
+    if (!episode.audio_url) return;
     
     const link = document.createElement('a');
-    link.href = audioToUse;
-    const filename = episode.processed_audio_url ? 'podcast_with_music.mp3' : 'podcast_raw.mp3';
-    link.download = filename;
+    link.href = episode.audio_url;
+    link.download = `podcast_episode_${episode.id}.mp3`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -211,20 +160,9 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     setIsGeneratingAudio(true);
     
     try {
-      // First ensure buckets exist
-      console.log("Setting up storage buckets...");
-      const setupResponse = await supabase.functions.invoke(
-        "setup-podcast-buckets",
-        {}
-      );
-      
-      if (!setupResponse.data?.success) {
-        throw new Error("Failed to set up storage buckets");
-      }
-      
       toast({
         title: "Generating Audio",
-        description: "Converting podcast script to audio with background music. This may take a few minutes...",
+        description: "Converting podcast script to audio. This may take a few minutes...",
       });
 
       const { data, error } = await supabase.functions.invoke(
@@ -244,11 +182,12 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
 
       toast({
         title: "Success",
-        description: "Podcast audio generation initiated successfully!",
+        description: "Podcast audio generated successfully!",
       });
       
-      pollForAudioProcessingStatus(episode.id);
-      
+      if (onRefresh) {
+        onRefresh();
+      }
     } catch (error) {
       console.error("Error generating podcast audio:", error);
       toast({
@@ -261,237 +200,6 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     }
   };
 
-  const handleProcessAudio = async () => {
-    if (!episode.id || !episode.audio_url) {
-      toast({
-        title: "Error",
-        description: "Episode ID or audio URL is missing",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsProcessingAudio(true);
-    
-    try {
-      // First ensure buckets exist
-      console.log("Setting up storage buckets...");
-      const setupResponse = await supabase.functions.invoke(
-        "setup-podcast-buckets",
-        {}
-      );
-      
-      console.log("Setup buckets response:", setupResponse);
-      
-      if (!setupResponse.data?.success) {
-        throw new Error("Failed to set up storage buckets for podcast processing");
-      }
-      
-      const { data: musicExists } = await supabase
-        .storage
-        .from("podcast_music")
-        .list();
-        
-      const backgroundMusicExists = musicExists?.some(file => file.name === "default_background.mp3");
-      
-      if (!backgroundMusicExists) {
-        throw new Error("No background music file found. Please upload a background music file first.");
-      }
-      
-      toast({
-        title: "Processing Audio",
-        description: "Adding background music to podcast audio. This may take a few minutes...",
-      });
-
-      // Call the process-podcast-audio function directly
-      const { data, error } = await supabase.functions.invoke(
-        "process-podcast-audio",
-        {
-          body: { 
-            episodeId: episode.id,
-            audioUrl: episode.audio_url
-          },
-        }
-      );
-
-      console.log("Process audio response:", data, error);
-
-      if (error) {
-        throw error;
-      }
-
-      if (!data || !data.success) {
-        throw new Error(data?.error || "Failed to process podcast audio");
-      }
-
-      toast({
-        title: "Success",
-        description: data.message || "Background music processing initiated successfully!",
-      });
-      
-      pollForAudioProcessingStatus(episode.id);
-      
-    } catch (error) {
-      console.error("Error processing podcast audio:", error);
-      
-      let errorMessage = error instanceof Error ? error.message : "Failed to process podcast audio";
-      
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessingAudio(false);
-    }
-  };
-
-  const handleUploadBackgroundMusic = async () => {
-    try {
-      const fileInput = document.createElement('input');
-      fileInput.type = 'file';
-      fileInput.accept = 'audio/mpeg,audio/mp3';
-      
-      fileInput.onchange = async (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (!file) return;
-        
-        // Validate file type
-        if (!file.type.match('audio/(mpeg|mp3)')) {
-          toast({
-            title: "Invalid File Type",
-            description: "Please upload an MP3 audio file.",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        // Validate file size (10MB limit)
-        if (file.size > 10 * 1024 * 1024) {
-          toast({
-            title: "File Too Large",
-            description: "Maximum file size is 10MB.",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        toast({
-          title: "Uploading Music",
-          description: "Uploading background music file...",
-        });
-        
-        // Setup buckets first
-        console.log("Setting up storage buckets...");
-        const setupResponse = await supabase.functions.invoke(
-          "setup-podcast-buckets",
-          {}
-        );
-        
-        console.log("Setup buckets response:", setupResponse);
-        
-        if (!setupResponse.data?.success) {
-          throw new Error("Failed to set up storage buckets");
-        }
-        
-        // Upload the file
-        console.log("Uploading background music file...");
-        const { data: uploadData, error: uploadError } = await supabase
-          .storage
-          .from("podcast_music")
-          .upload("default_background.mp3", file, {
-            contentType: "audio/mpeg",
-            upsert: true,
-          });
-          
-        if (uploadError) {
-          console.error("Upload error:", uploadError);
-          throw uploadError;
-        }
-        
-        // Get public URL for verification
-        const { data: publicUrlData } = supabase
-          .storage
-          .from("podcast_music")
-          .getPublicUrl("default_background.mp3");
-          
-        console.log("Music uploaded to:", publicUrlData.publicUrl);
-        
-        toast({
-          title: "Success",
-          description: "Background music uploaded successfully! You can now add it to podcasts.",
-        });
-      };
-      
-      fileInput.click();
-    } catch (error) {
-      console.error("Error uploading background music:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to upload background music",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const pollForAudioProcessingStatus = async (episodeId: string) => {
-    const maxAttempts = 30;
-    let attempts = 0;
-    
-    const pollInterval = setInterval(async () => {
-      attempts++;
-      
-      try {
-        const { data, error } = await supabase
-          .from("podcast_episodes")
-          .select("*")
-          .eq("id", episodeId)
-          .single();
-          
-        if (error) {
-          console.error("Error polling episode status:", error);
-          clearInterval(pollInterval);
-          return;
-        }
-        
-        if (data.audio_processing_status === 'completed' || 
-            data.audio_processing_status === 'error' || 
-            attempts >= maxAttempts) {
-          
-          clearInterval(pollInterval);
-          
-          if (onRefresh) {
-            onRefresh();
-          }
-          
-          if (data.audio_processing_status === 'completed') {
-            toast({
-              title: "Processing Complete",
-              description: "Podcast audio with background music is now available!",
-            });
-          } else if (data.audio_processing_status === 'error') {
-            toast({
-              title: "Processing Error",
-              description: data.audio_processing_error || "An error occurred while processing the audio",
-              variant: "destructive",
-            });
-          } else if (attempts >= maxAttempts) {
-            toast({
-              title: "Processing Timeout",
-              description: "The audio processing is taking longer than expected. Check back later.",
-              variant: "destructive",
-            });
-          }
-        }
-      } catch (error) {
-        console.error("Error in polling:", error);
-        clearInterval(pollInterval);
-      }
-    }, 10000);
-    
-    return () => clearInterval(pollInterval);
-  };
-
   const scriptPreview = episode.podcast_script 
     ? episode.podcast_script.slice(0, 150) + (episode.podcast_script.length > 150 ? "..." : "")
     : "No script available";
@@ -499,11 +207,6 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
   const canGenerateAudio = episode.podcast_script && 
                           !episode.audio_url && 
                           episode.status === "completed";
-                          
-  const canProcessAudio = episode.audio_url && 
-                         !episode.processed_audio_url && 
-                         episode.status === "completed" &&
-                         episode.audio_processing_status !== "processing";
 
   return (
     <Collapsible 
@@ -527,11 +230,10 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
               {formatDate(episode.created_at)}
               <span className="mx-2">•</span>
               {getStatusBadge()}
-              {getProcessingStatusBadge()}
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {audioToUse && (
+            {episode.audio_url && (
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -542,7 +244,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
               </Button>
             )}
             
-            {episode.status === "completed" && audioToUse && (
+            {episode.status === "completed" && episode.audio_url && (
               <Button 
                 variant="outline" 
                 size="sm"
@@ -608,97 +310,20 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
       
       <CollapsibleContent>
         <div className="px-4 pb-4 space-y-4">
-          {audioToUse ? (
+          {episode.audio_url ? (
             <div className="mt-4">
               <div className="flex items-center text-gray-300 text-sm mb-2">
                 <Music className="h-4 w-4 mr-2" />
                 Audio Playback
-                {episode.processed_audio_url && (
-                  <span className="ml-2 text-xs text-green-400">(With Background Music)</span>
-                )}
               </div>
               <AudioPlayer 
-                audioUrl={audioToUse} 
+                audioUrl={episode.audio_url} 
                 title={`Episode ${formatDate(episode.scheduled_for)}`}
                 subtitle="Beyond the Scan"
                 showDownload={true}
               />
-              
-              <div className="flex flex-col gap-2 mt-2">
-                {canProcessAudio && (
-                  <Button 
-                    onClick={handleProcessAudio}
-                    className="w-full bg-blue-600/30 hover:bg-blue-700/40 text-white"
-                    disabled={isProcessingAudio}
-                  >
-                    {isProcessingAudio ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Adding Background Music...
-                      </>
-                    ) : (
-                      <>
-                        <Music className="mr-2 h-4 w-4" />
-                        Add Background Music
-                      </>
-                    )}
-                  </Button>
-                )}
-                
-                <Button
-                  onClick={handleUploadBackgroundMusic}
-                  variant="outline"
-                  className="w-full border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  Upload Custom Background Music
-                </Button>
-              </div>
-              
-              {episode.audio_processing_error && (
-                <div className="mt-2 p-3 bg-red-900/20 border border-red-900/30 rounded-md">
-                  <div className="flex items-center text-red-400 text-xs font-medium">
-                    <AlertCircle className="h-3 w-3 mr-1" />
-                    Error adding background music
-                  </div>
-                  <p className="text-gray-300 text-xs mt-1">{episode.audio_processing_error}</p>
-                  
-                  <div className="flex flex-col gap-2 mt-2">
-                    {episode.audio_url && episode.audio_processing_status === "error" && (
-                      <Button 
-                        onClick={handleProcessAudio}
-                        className="w-full bg-red-900/30 hover:bg-red-800/40 text-white text-xs py-1 h-7"
-                        disabled={isProcessingAudio}
-                        size="sm"
-                      >
-                        {isProcessingAudio ? (
-                          <>
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                            Retrying...
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCw className="mr-1 h-3 w-3" />
-                            Retry Adding Music
-                          </>
-                        )}
-                      </Button>
-                    )}
-                    
-                    <Button
-                      onClick={handleUploadBackgroundMusic}
-                      variant="outline"
-                      size="sm"
-                      className="w-full border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d] text-xs py-1 h-7"
-                    >
-                      <Upload className="mr-1 h-3 w-4" />
-                      Upload Background Music File
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
-          ) : (
+          ) : canGenerateAudio && (
             <div className="mt-4">
               <div className="flex items-center text-gray-300 text-sm mb-2">
                 <Music className="h-4 w-4 mr-2" />
@@ -707,7 +332,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
               <Button 
                 onClick={handleGenerateAudio}
                 className="w-full bg-gradient-to-r from-[#3a3f7d] to-[#6366f1] hover:from-[#4a4f8d] hover:to-[#7376ff] text-white"
-                disabled={isGeneratingAudio || !canGenerateAudio}
+                disabled={isGeneratingAudio}
               >
                 {isGeneratingAudio ? (
                   <>
@@ -717,7 +342,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
                 ) : (
                   <>
                     <Music className="mr-2 h-4 w-4" />
-                    Generate Podcast Audio with Music
+                    Generate Podcast Audio
                   </>
                 )}
               </Button>

@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -133,13 +132,13 @@ serve(async (req) => {
     
     // Generate a filename for the audio file
     const timestamp = new Date().toISOString().replace(/[-:.]/g, "");
-    const rawFilename = `raw_podcast_${episodeId}_${timestamp}.mp3`;
-    const rawFilePath = `podcast_audio/raw/${rawFilename}`;
+    const filename = `podcast_${episodeId}_${timestamp}.mp3`;
+    const filePath = `podcast_audio/${filename}`;
     
     // Create a File object from the array buffer
     const audioFile = new File(
       [audioArrayBuffer], 
-      rawFilename, 
+      filename, 
       { type: "audio/mpeg" }
     );
 
@@ -163,103 +162,48 @@ serve(async (req) => {
       }
     }
 
-    // Upload raw audio file to Supabase Storage
-    console.log(`Uploading raw audio file: ${rawFilePath}`);
+    // Upload audio file to Supabase Storage
+    console.log(`Uploading audio file: ${filePath}`);
     const { error: uploadError } = await supabase
       .storage
       .from("podcast_audio")
-      .upload(rawFilePath, audioFile, {
+      .upload(filePath, audioFile, {
         contentType: "audio/mpeg",
         upsert: true,
       });
 
     if (uploadError) {
-      throw new Error(`Failed to upload raw audio file: ${uploadError.message}`);
+      throw new Error(`Failed to upload audio file: ${uploadError.message}`);
     }
 
-    // Get public URL for the raw uploaded file
-    const { data: rawPublicUrlData } = supabase
+    // Get public URL for the uploaded file
+    const { data: publicUrlData } = supabase
       .storage
       .from("podcast_audio")
-      .getPublicUrl(rawFilePath);
+      .getPublicUrl(filePath);
 
-    const rawAudioUrl = rawPublicUrlData.publicUrl;
+    const audioUrl = publicUrlData.publicUrl;
 
-    // Update episode status
+    // Update the episode with the audio URL
     await supabase
       .from("podcast_episodes")
       .update({
-        status: "processing_audio",
-        audio_url: rawAudioUrl,
+        audio_url: audioUrl,
+        status: "completed",
         updated_at: new Date().toISOString(),
-        audio_processing_status: "pending"
       })
       .eq("id", episodeId);
 
-    // Process the audio by calling the process-podcast-audio function 
-    console.log("Calling process-podcast-audio function to add background music...");
-    
-    try {
-      const processResponse = await supabase.functions.invoke(
-        "process-podcast-audio",
-        {
-          body: { 
-            episodeId: episodeId,
-            audioUrl: rawAudioUrl
-          }
-        }
-      );
-      
-      console.log("Process audio response:", processResponse);
-      
-      if (processResponse.error) {
-        throw new Error(`Error invoking process-podcast-audio: ${processResponse.error.message}`);
+    return new Response(
+      JSON.stringify({
+        success: true,
+        episodeId,
+        audioUrl,
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
-      
-      if (!processResponse.data || !processResponse.data.success) {
-        throw new Error(processResponse.data?.error || "Unknown error processing audio");
-      }
-      
-      return new Response(
-        JSON.stringify({
-          success: true,
-          episodeId,
-          audioUrl: rawAudioUrl,
-          processedAudioUrl: processResponse.data.processedAudioUrl,
-          message: "Audio generated and processing with background music has been initiated"
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-      
-    } catch (processingError) {
-      console.error(`Error calling process-podcast-audio function: ${processingError.message}`);
-      
-      // Update the episode with the error but still mark as completed since we have the raw audio
-      await supabase
-        .from("podcast_episodes")
-        .update({
-          status: "completed",
-          audio_processing_status: "error",
-          audio_processing_error: processingError.message,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", episodeId);
-      
-      // We still consider the function a success since we have the raw audio
-      return new Response(
-        JSON.stringify({
-          success: true,
-          episodeId,
-          audioUrl: rawAudioUrl,
-          message: "Raw audio generated successfully, but could not process with background music: " + processingError.message,
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
+    );
   } catch (error) {
     console.error(`Error in generate-podcast-audio: ${error.message}`);
     
