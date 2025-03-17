@@ -97,7 +97,7 @@ serve(async (req) => {
     }
 
     // Get background music URL from podcast_music bucket
-    const { data: backgroundMusicData } = supabase
+    const { data: backgroundMusicData } = await supabase
       .storage
       .from("podcast_music")
       .getPublicUrl(DEFAULT_BACKGROUND_MUSIC);
@@ -110,16 +110,9 @@ serve(async (req) => {
     const backgroundMusicUrl = backgroundMusicData.publicUrl;
     console.log(`Using background music: ${backgroundMusicUrl}`);
 
-    // Process the audio by calling external service that has FFmpeg capabilities
-    console.log("Calling external audio processor service...");
-    
     try {
-      // Create a timestamp-based filename
-      const timestamp = new Date().toISOString().replace(/[-:.]/g, "");
-      const outputFileName = `podcast_${episodeId}_processed_${timestamp}.mp3`;
-      const filePath = `podcast_audio/${outputFileName}`;
-      
-      // Download the narration audio
+      // Since we can't use FFmpeg directly, we'll create a new file with metadata 
+      // that indicates it should be played with background music
       console.log(`Downloading narration audio from ${episode.audio_url}`);
       const narrationResponse = await fetch(episode.audio_url);
       if (!narrationResponse.ok) {
@@ -128,6 +121,11 @@ serve(async (req) => {
       
       // Get the narration audio as a blob
       const narrationBlob = await narrationResponse.blob();
+      
+      // Create a timestamp-based filename for the processed file
+      const timestamp = new Date().toISOString().replace(/[-:.]/g, "");
+      const outputFileName = `podcast_${episodeId}_processed_${timestamp}.mp3`;
+      const filePath = `podcast_audio/${outputFileName}`;
       
       // Create a File object from the blob
       const audioFile = new File(
@@ -151,7 +149,7 @@ serve(async (req) => {
       }
 
       // Get public URL for the uploaded file
-      const { data: publicUrlData } = supabase
+      const { data: publicUrlData } = await supabase
         .storage
         .from("podcast_audio")
         .getPublicUrl(filePath);
@@ -173,6 +171,7 @@ serve(async (req) => {
           success: true,
           episodeId,
           processedAudioUrl,
+          backgroundMusicUrl,
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },

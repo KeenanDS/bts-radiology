@@ -6,4 +6,4 @@ export const TIME_WINDOWS = [7, 14, 30];
 export const DEFAULT_VOICE_ID = "bmAn0TLASQN7ctGBMHgN"; // Bennet's voice ID
 
 // Background music file path in the podcast_music bucket
-export const DEFAULT_BACKGROUND_MUSIC = "intro_outro.mp3";
+export const DEFAULT_BACKGROUND_MUSIC = "default_background.mp3";

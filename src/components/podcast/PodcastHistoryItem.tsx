@@ -167,6 +167,68 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     }
   };
 
+  const handleProcessAudio = async () => {
+    if (!episode.id) {
+      toast({
+        title: "Error",
+        description: "Episode ID is missing",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!episode.audio_url) {
+      toast({
+        title: "Error",
+        description: "Episode needs to have audio generated first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessingAudio(true);
+    
+    try {
+      toast({
+        title: "Processing Audio",
+        description: "Adding background music to podcast audio. This may take a few minutes...",
+      });
+
+      const { data, error } = await supabase.functions.invoke(
+        "process-podcast-audio",
+        {
+          body: { episodeId: episode.id },
+        }
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data || !data.success) {
+        throw new Error(data?.error || "Failed to process podcast audio");
+      }
+
+      toast({
+        title: "Success",
+        description: "Podcast audio processed with background music!",
+      });
+      
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error("Error processing podcast audio:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to process podcast audio",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessingAudio(false);
+    }
+  };
+
   const handleDownloadAudio = () => {
     if (!episode.audio_url) return;
     
@@ -239,68 +301,6 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
       });
     } finally {
       setIsGeneratingAudio(false);
-    }
-  };
-
-  const handleProcessAudio = async () => {
-    if (!episode.id) {
-      toast({
-        title: "Error",
-        description: "Episode ID is missing",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!episode.audio_url) {
-      toast({
-        title: "Error",
-        description: "Episode needs to have audio generated first",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsProcessingAudio(true);
-    
-    try {
-      toast({
-        title: "Processing Audio",
-        description: "Adding background music to podcast audio. This may take a few minutes...",
-      });
-
-      const { data, error } = await supabase.functions.invoke(
-        "process-podcast-audio",
-        {
-          body: { episodeId: episode.id },
-        }
-      );
-
-      if (error) {
-        throw error;
-      }
-
-      if (!data || !data.success) {
-        throw new Error(data?.error || "Failed to process podcast audio");
-      }
-
-      toast({
-        title: "Success",
-        description: "Podcast audio processed with background music!",
-      });
-      
-      if (onRefresh) {
-        onRefresh();
-      }
-    } catch (error) {
-      console.error("Error processing podcast audio:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to process podcast audio",
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessingAudio(false);
     }
   };
 
@@ -546,4 +546,3 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
 };
 
 export default PodcastHistoryItem;
-
