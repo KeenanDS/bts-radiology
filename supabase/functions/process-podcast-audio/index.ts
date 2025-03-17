@@ -11,6 +11,31 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 // Initialize Supabase client
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// Web Audio API isn't available in Deno runtime, so we'll use a simpler approach for audio mixing
+async function mixAudio(narrationArrayBuffer: ArrayBuffer, backgroundMusicArrayBuffer: ArrayBuffer): Promise<ArrayBuffer> {
+  try {
+    console.log("Starting audio mixing process");
+    
+    // Create a new Web Audio API context
+    // Note: This is a basic implementation and in a real-world scenario,
+    // we would use a more sophisticated approach for server-side audio mixing
+    
+    // For now, we'll implement a client-side approach by providing both audio sources
+    // and let the frontend handle the mixing
+    
+    // In the future, we can implement server-side mixing with proper audio processing libraries
+    
+    // For the current implementation, we'll just pass through the narration audio
+    // and provide the background music URL separately
+    
+    console.log("Finished audio mixing process");
+    return narrationArrayBuffer;
+  } catch (error) {
+    console.error(`Error in mixAudio: ${error.message}`);
+    throw error;
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -72,6 +97,7 @@ serve(async (req) => {
           success: true,
           episodeId,
           processedAudioUrl: episode.processed_audio_url,
+          backgroundMusicUrl: episode.background_music_url,
           message: "Audio was already processed",
         }),
         {
@@ -112,25 +138,26 @@ serve(async (req) => {
         throw new Error(`Failed to download background music: ${backgroundMusicResponse.status}`);
       }
       
-      // Since we can't use FFmpeg directly in Deno Deploy, we'll create a mixed audio URL
-      // that includes metadata about the background music, so the frontend can handle the mixing
-      
-      // Get narration as array buffer for manipulation
+      // Get narration and background music as array buffers
       const narrationArrayBuffer = await narrationResponse.arrayBuffer();
+      const backgroundMusicArrayBuffer = await backgroundMusicResponse.arrayBuffer();
+      
+      // Since we can't use proper audio mixing in Deno Deploy (no Web Audio API or FFmpeg),
+      // we'll provide both URLs and implement client-side mixing
       
       // Create a timestamp-based filename for the processed file
       const timestamp = new Date().toISOString().replace(/[-:.]/g, "");
       const outputFileName = `podcast_${episodeId}_processed_${timestamp}.mp3`;
       const filePath = `podcast_audio/${outputFileName}`;
       
-      // Create a File object from the array buffer
+      // Create a File object from the narration array buffer
       const audioFile = new File(
         [narrationArrayBuffer], 
         outputFileName, 
         { type: "audio/mpeg" }
       );
       
-      // Upload the processed audio file
+      // Upload the processed (currently just the narration) audio file
       console.log(`Uploading narration file to ${filePath}`);
       const { error: uploadError } = await supabase
         .storage
@@ -157,7 +184,7 @@ serve(async (req) => {
         .from("podcast_episodes")
         .update({
           processed_audio_url: processedAudioUrl,
-          background_music_url: backgroundMusicUrl, // Store the background music URL
+          background_music_url: backgroundMusicUrl,
           audio_processing_status: "completed",
           updated_at: new Date().toISOString(),
         })
@@ -169,6 +196,7 @@ serve(async (req) => {
           episodeId,
           processedAudioUrl,
           backgroundMusicUrl,
+          message: "Audio processed successfully. Client-side mixing will be used.",
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },

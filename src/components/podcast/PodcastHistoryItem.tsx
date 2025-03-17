@@ -191,7 +191,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     try {
       toast({
         title: "Processing Audio",
-        description: "Adding background music to podcast audio. This may take a few minutes...",
+        description: "Adding background music to podcast audio. This may take a few moments...",
       });
 
       const { data, error } = await supabase.functions.invoke(
@@ -443,6 +443,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
               </div>
               <AudioPlayer 
                 audioUrl={episode.processed_audio_url} 
+                backgroundMusicUrl={episode.background_music_url}
                 title={`Episode ${formatDate(episode.scheduled_for)} with Music`}
                 subtitle="Beyond the Scan"
                 showDownload={true}
@@ -546,4 +547,3 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
 };
 
 export default PodcastHistoryItem;
-
