@@ -6,6 +6,7 @@ import json
 import os
 import tempfile
 import time
+import sys
 from http.server import BaseHTTPRequestHandler
 from typing import Any, Dict, Optional
 
@@ -193,6 +194,9 @@ def process_audio(podcast_audio_url: str, episode_id: str) -> str:
         return podcast_audio_url
 
 class Handler(BaseHTTPRequestHandler):
+    def __init__(self):
+        self.response_data = None
+        
     def do_OPTIONS(self):
         self.send_response(200)
         for key, value in CORS_HEADERS.items():
@@ -201,10 +205,12 @@ class Handler(BaseHTTPRequestHandler):
     
     def do_POST(self):
         try:
-            content_length = int(self.headers.get("Content-Length", 0))
-            request_body = self.rfile.read(content_length)
-            
-            payload = json.loads(request_body)
+            # Parse the request body
+            if hasattr(self, 'body'):
+                request_body = self.body
+                payload = json.loads(request_body)
+            else:
+                payload = json.loads(sys.stdin.read())
             
             # Extract required parameters
             episode_id = payload.get("episodeId")
@@ -224,11 +230,12 @@ class Handler(BaseHTTPRequestHandler):
             processed_url = process_audio(audio_url, episode_id)
             
             # Send response
-            self.send_success_response({
+            self.response_data = {
                 "success": True,
                 "episodeId": episode_id,
                 "processedAudioUrl": processed_url
-            })
+            }
+            self.send_success_response(self.response_data)
             
         except Exception as e:
             self.send_error_response(500, f"Internal server error: {str(e)}")
@@ -238,17 +245,22 @@ class Handler(BaseHTTPRequestHandler):
         for key, value in CORS_HEADERS.items():
             self.send_header(key, value)
         self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
+        self.response_data = data
+        if hasattr(self, 'wfile'):
+            self.wfile.write(json.dumps(data).encode())
     
     def send_error_response(self, status_code, message):
         self.send_response(status_code)
         for key, value in CORS_HEADERS.items():
             self.send_header(key, value)
         self.end_headers()
-        self.wfile.write(json.dumps({
+        error_data = {
             "success": False,
             "error": message
-        }).encode())
+        }
+        self.response_data = error_data
+        if hasattr(self, 'wfile'):
+            self.wfile.write(json.dumps(error_data).encode())
 
 def serve(request):
     handler = Handler()
