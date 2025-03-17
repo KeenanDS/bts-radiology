@@ -90,6 +90,7 @@ export type Database = {
           audio_processing_error: string | null
           audio_processing_status: string | null
           audio_url: string | null
+          background_music_url: string | null
           created_at: string
           id: string
           is_featured: boolean | null
@@ -105,6 +106,7 @@ export type Database = {
           audio_processing_error?: string | null
           audio_processing_status?: string | null
           audio_url?: string | null
+          background_music_url?: string | null
           created_at?: string
           id?: string
           is_featured?: boolean | null
@@ -120,6 +122,7 @@ export type Database = {
           audio_processing_error?: string | null
           audio_processing_status?: string | null
           audio_url?: string | null
+          background_music_url?: string | null
           created_at?: string
           id?: string
           is_featured?: boolean | null
