@@ -15,7 +15,7 @@ from pydantic import BaseModel
 # Define the input model for the mix-audio endpoint
 class AudioMixRequest(BaseModel):
     audio_url: str
-    background_music_url: str = "https://example.com/default-background.mp3"
+    background_music_url: str = "https://gbypnkiziennhzqbhqtr.supabase.co/storage/v1/object/public/podcast_music//default_background.mp3"
     intro_duration: int = 10000
     outro_duration: int = 10000
     background_volume: float = -10
