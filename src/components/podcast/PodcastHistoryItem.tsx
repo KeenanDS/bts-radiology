@@ -267,6 +267,8 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
         {}
       );
       
+      console.log("Setup buckets response:", setupResponse);
+      
       if (!setupResponse.data?.success) {
         throw new Error("Failed to set up storage buckets for podcast processing");
       }
@@ -285,6 +287,8 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
           },
         }
       );
+
+      console.log("Process audio response:", data, error);
 
       if (error) {
         throw error;
@@ -318,11 +322,28 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
       fileInput.accept = 'audio/mpeg,audio/mp3';
-      fileInput.click();
       
       fileInput.onchange = async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) return;
+        
+        if (!file.type.match('audio/(mpeg|mp3)')) {
+          toast({
+            title: "Invalid File Type",
+            description: "Please upload an MP3 audio file.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        if (file.size > 50 * 1024 * 1024) {
+          toast({
+            title: "File Too Large",
+            description: "Maximum file size is 50MB.",
+            variant: "destructive",
+          });
+          return;
+        }
         
         toast({
           title: "Uploading Music",
@@ -333,6 +354,8 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
           "setup-podcast-buckets",
           {}
         );
+        
+        console.log("Setup buckets response:", setupResponse);
         
         if (!setupResponse.data?.success) {
           throw new Error("Failed to set up storage buckets");
@@ -347,6 +370,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
           });
           
         if (uploadError) {
+          console.error("Upload error:", uploadError);
           throw uploadError;
         }
         
@@ -355,6 +379,8 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
           description: "Background music uploaded successfully! You can now add it to podcasts.",
         });
       };
+      
+      fileInput.click();
     } catch (error) {
       console.error("Error uploading background music:", error);
       toast({
@@ -556,23 +582,25 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
               />
               
               <div className="flex flex-col gap-2 mt-2">
-                <Button 
-                  onClick={handleProcessAudio}
-                  className="w-full bg-blue-600/30 hover:bg-blue-700/40 text-white"
-                  disabled={isProcessingAudio}
-                >
-                  {isProcessingAudio ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Adding Background Music...
-                    </>
-                  ) : (
-                    <>
-                      <Music className="mr-2 h-4 w-4" />
-                      Add Background Music
-                    </>
-                  )}
-                </Button>
+                {canProcessAudio && (
+                  <Button 
+                    onClick={handleProcessAudio}
+                    className="w-full bg-blue-600/30 hover:bg-blue-700/40 text-white"
+                    disabled={isProcessingAudio}
+                  >
+                    {isProcessingAudio ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Adding Background Music...
+                      </>
+                    ) : (
+                      <>
+                        <Music className="mr-2 h-4 w-4" />
+                        Add Background Music
+                      </>
+                    )}
+                  </Button>
+                )}
                 
                 <Button
                   onClick={handleUploadBackgroundMusic}
@@ -627,7 +655,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
                 </div>
               )}
             </div>
-          ) : canGenerateAudio && (
+          ) : (
             <div className="mt-4">
               <div className="flex items-center text-gray-300 text-sm mb-2">
                 <Music className="h-4 w-4 mr-2" />

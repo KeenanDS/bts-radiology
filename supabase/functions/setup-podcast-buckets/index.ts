@@ -30,11 +30,34 @@ serve(async (req) => {
         });
         
         if (checkResponse.ok) {
-          results.push({
-            bucket,
-            status: "exists",
-            action: "none"
+          // Ensure the bucket is public
+          const updateBucketUrl = `${supabaseUrl}/storage/v1/bucket/${bucket}`;
+          const updateResponse = await fetch(updateBucketUrl, {
+            method: "PUT",
+            headers: {
+              "Authorization": `Bearer ${supabaseServiceKey}`,
+              "apikey": supabaseServiceKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              id: bucket,
+              name: bucket,
+              public: true,
+              file_size_limit: 52428800, // 50MB
+            }),
           });
+          
+          if (updateResponse.ok) {
+            results.push({
+              bucket,
+              status: "exists",
+              action: "updated to public"
+            });
+          } else {
+            const errorText = await updateResponse.text();
+            throw new Error(`Failed to update bucket to public: ${updateResponse.status} - ${errorText}`);
+          }
+          
           continue;
         }
         
@@ -64,12 +87,13 @@ serve(async (req) => {
           results.push({
             bucket,
             status: "created",
-            action: "create"
+            action: "create as public"
           });
         } else {
           throw new Error(`Error checking bucket: ${checkResponse.status}`);
         }
       } catch (error) {
+        console.error(`Error with bucket ${bucket}:`, error);
         results.push({
           bucket,
           status: "error",
