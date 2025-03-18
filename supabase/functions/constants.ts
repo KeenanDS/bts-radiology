@@ -19,8 +19,3 @@ export const OUTRO_FADE_DURATION = 5;
 // Retry settings
 export const MAX_RETRIES = 3;
 export const RETRY_DELAY_MS = 2000;
-
-// Dolby.io API URLs
-export const DOLBY_API_URL = "https://api.dolby.io";
-export const DOLBY_API_AUTH_PREFIX = "/v1/auth"; // Auth endpoints use /v1 prefix
-export const DOLBY_API_MEDIA_PREFIX = "/media"; // Media endpoints don't use /v1 prefix
