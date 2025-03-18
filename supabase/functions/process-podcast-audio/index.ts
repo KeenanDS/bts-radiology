@@ -10,7 +10,8 @@ import {
   OUTRO_FADE_DURATION,
   MAX_RETRIES,
   RETRY_DELAY_MS,
-  DOLBY_API_URL
+  DOLBY_API_URL,
+  DOLBY_API_MEDIA_PREFIX
 } from "../constants.ts";
 import { fetchWithRetry } from "../generate-podcast/utils.ts";
 
@@ -31,6 +32,7 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     console.log(`Using background music: ${backgroundMusicUrl}`);
     
     // Step 1: Get access token from Dolby
+    console.log("Requesting Dolby.io access token...");
     const tokenResponse = await fetch(`${DOLBY_API_URL}/v1/auth/token`, {
       method: "POST",
       headers: {
@@ -42,6 +44,7 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
+      console.error(`Token response error: ${tokenResponse.status} - ${errorText}`);
       throw new Error(`Failed to get Dolby.io access token: ${tokenResponse.status} - ${errorText}`);
     }
     
@@ -67,18 +70,20 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     const musicBuffer = await musicResponse.arrayBuffer();
     console.log(`Successfully downloaded background music: ${musicBuffer.byteLength} bytes`);
     
-    // Step 4: Upload narration to Dolby.io
+    // Step 4: Upload narration to Dolby.io - FIXED: Added correct API path
     console.log("Requesting Dolby.io input URL for narration");
-    const narrationUploadResponse = await fetch(`${DOLBY_API_URL}/media/input`, {
+    const narrationUploadResponse = await fetch(`${DOLBY_API_URL}${DOLBY_API_MEDIA_PREFIX}/input`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${accessToken}`,
         "Content-Type": "application/json"
-      }
+      },
+      body: JSON.stringify({}) // Empty body is fine for this endpoint
     });
     
     if (!narrationUploadResponse.ok) {
       const errorText = await narrationUploadResponse.text();
+      console.error(`Narration upload request error: ${narrationUploadResponse.status} - ${errorText}`);
       throw new Error(`Failed to get Dolby.io input URL for narration: ${narrationUploadResponse.status} - ${errorText}`);
     }
     
@@ -99,22 +104,25 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     
     if (!narrationPutResponse.ok) {
       const errorText = await narrationPutResponse.text();
+      console.error(`Narration PUT error: ${narrationPutResponse.status} - ${errorText}`);
       throw new Error(`Failed to upload narration audio to Dolby.io: ${narrationPutResponse.status} - ${errorText}`);
     }
     console.log("Successfully uploaded narration audio to Dolby.io");
     
-    // Step 5: Upload background music to Dolby.io
+    // Step 5: Upload background music to Dolby.io - FIXED: Added correct API path
     console.log("Requesting Dolby.io input URL for background music");
-    const musicUploadResponse = await fetch(`${DOLBY_API_URL}/media/input`, {
+    const musicUploadResponse = await fetch(`${DOLBY_API_URL}${DOLBY_API_MEDIA_PREFIX}/input`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${accessToken}`,
         "Content-Type": "application/json"
-      }
+      },
+      body: JSON.stringify({}) // Empty body is fine for this endpoint
     });
     
     if (!musicUploadResponse.ok) {
       const errorText = await musicUploadResponse.text();
+      console.error(`Music upload request error: ${musicUploadResponse.status} - ${errorText}`);
       throw new Error(`Failed to get Dolby.io input URL for background music: ${musicUploadResponse.status} - ${errorText}`);
     }
     
@@ -135,19 +143,20 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     
     if (!musicPutResponse.ok) {
       const errorText = await musicPutResponse.text();
+      console.error(`Music PUT error: ${musicPutResponse.status} - ${errorText}`);
       throw new Error(`Failed to upload background music to Dolby.io: ${musicPutResponse.status} - ${errorText}`);
     }
     console.log("Successfully uploaded background music to Dolby.io");
     
-    // Step 6: Enhance the narration audio for better quality
+    // Step 6: Enhance the narration audio for better quality - FIXED: Added correct API path
     console.log("Enhancing narration audio for better speech quality");
     const enhancedNarrationUrl = await enhanceNarrationAudio(narrationDolbyUrl, accessToken);
     
-    // Step 7: Get audio durations
+    // Step 7: Get audio durations - FIXED: Added correct API path
     const narrationDuration = await getAudioDuration(enhancedNarrationUrl, accessToken);
     console.log(`Narration duration: ${narrationDuration} seconds`);
     
-    // Step 8: Build the audio mix with intro/outro
+    // Step 8: Build the audio mix with intro/outro - FIXED: Added correct API path
     console.log("Creating master mix with intro/outro music");
     const outputUrl = await createAudioMix(enhancedNarrationUrl, musicDolbyUrl, narrationDuration, accessToken);
     
@@ -162,6 +171,7 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     
     if (!processedAudioResponse.ok) {
       const errorText = await processedAudioResponse.text();
+      console.error(`Download error: ${processedAudioResponse.status} - ${errorText}`);
       throw new Error(`Failed to download processed audio: ${processedAudioResponse.status} - ${errorText}`);
     }
     
@@ -175,10 +185,11 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
   }
 }
 
-// Function to enhance narration audio for better speech quality
+// Function to enhance narration audio for better speech quality - FIXED: Added correct API path
 async function enhanceNarrationAudio(inputUrl: string, accessToken: string): Promise<string> {
   // Create output location
-  const outputResponse = await fetchWithRetry(`${DOLBY_API_URL}/media/output`, {
+  console.log("Creating Dolby.io output location for enhanced narration");
+  const outputResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_API_MEDIA_PREFIX}/output`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -188,14 +199,17 @@ async function enhanceNarrationAudio(inputUrl: string, accessToken: string): Pro
   
   if (!outputResponse.ok) {
     const errorText = await outputResponse.text();
+    console.error(`Enhance output error: ${outputResponse.status} - ${errorText}`);
     throw new Error(`Failed to create output location: ${outputResponse.status} - ${errorText}`);
   }
   
   const outputData = await outputResponse.json();
   const outputUrl = outputData.url;
+  console.log(`Created output location: ${outputUrl}`);
   
-  // Use Media Enhance to improve voice clarity
-  const enhanceJobResponse = await fetchWithRetry(`${DOLBY_API_URL}/media/enhance`, {
+  // Use Media Enhance to improve voice clarity - FIXED: Added correct API path
+  console.log("Submitting enhance job to Dolby.io");
+  const enhanceJobResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_API_MEDIA_PREFIX}/enhance`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -218,6 +232,7 @@ async function enhanceNarrationAudio(inputUrl: string, accessToken: string): Pro
   
   if (!enhanceJobResponse.ok) {
     const errorText = await enhanceJobResponse.text();
+    console.error(`Enhance job error: ${enhanceJobResponse.status} - ${errorText}`);
     throw new Error(`Failed to create enhancement job: ${enhanceJobResponse.status} - ${errorText}`);
   }
   
@@ -231,10 +246,11 @@ async function enhanceNarrationAudio(inputUrl: string, accessToken: string): Pro
   return outputUrl;
 }
 
-// Function to create the audio mix with intro/outro music
+// Function to create the audio mix with intro/outro music - FIXED: Added correct API path
 async function createAudioMix(narrationUrl: string, musicUrl: string, narrationDuration: number, accessToken: string): Promise<string> {
   // Create output location
-  const outputResponse = await fetchWithRetry(`${DOLBY_API_URL}/media/output`, {
+  console.log("Creating Dolby.io output location for final mix");
+  const outputResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_API_MEDIA_PREFIX}/output`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -244,19 +260,21 @@ async function createAudioMix(narrationUrl: string, musicUrl: string, narrationD
   
   if (!outputResponse.ok) {
     const errorText = await outputResponse.text();
-    throw new Error(`Failed to create output location: ${outputResponse.status} - ${errorText}`);
+    console.error(`Mix output error: ${outputResponse.status} - ${errorText}`);
+    throw new Error(`Failed to create output location for mix: ${outputResponse.status} - ${errorText}`);
   }
   
   const outputData = await outputResponse.json();
   const outputUrl = outputData.url;
+  console.log(`Created output location for mix: ${outputUrl}`);
   
   // Calculate the start time for the outro music (from the end of the narration)
   const outroStartTime = Math.max(0, narrationDuration - OUTRO_DURATION);
   
-  // Create and process the audio mix job with intro/outro segments
+  // Create and process the audio mix job with intro/outro segments - FIXED: Added correct API path
   console.log("Creating audio mix with intro and outro segments");
   
-  const mixJobResponse = await fetchWithRetry(`${DOLBY_API_URL}/media/mix`, {
+  const mixJobResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_API_MEDIA_PREFIX}/mix`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -310,6 +328,7 @@ async function createAudioMix(narrationUrl: string, musicUrl: string, narrationD
   
   if (!mixJobResponse.ok) {
     const errorText = await mixJobResponse.text();
+    console.error(`Mix job error: ${mixJobResponse.status} - ${errorText}`);
     throw new Error(`Failed to create mix job: ${mixJobResponse.status} - ${errorText}`);
   }
   
@@ -323,9 +342,10 @@ async function createAudioMix(narrationUrl: string, musicUrl: string, narrationD
   return outputUrl;
 }
 
-// Function to get audio duration using Dolby.io API
+// Function to get audio duration using Dolby.io API - FIXED: Added correct API path
 async function getAudioDuration(audioUrl: string, accessToken: string): Promise<number> {
-  const analysisResponse = await fetchWithRetry(`${DOLBY_API_URL}/media/analyze?url=${encodeURIComponent(audioUrl)}`, {
+  console.log(`Getting audio duration for: ${audioUrl}`);
+  const analysisResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_API_MEDIA_PREFIX}/analyze?url=${encodeURIComponent(audioUrl)}`, {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${accessToken}`
@@ -334,14 +354,16 @@ async function getAudioDuration(audioUrl: string, accessToken: string): Promise<
   
   if (!analysisResponse.ok) {
     const errorText = await analysisResponse.text();
+    console.error(`Analyze error: ${analysisResponse.status} - ${errorText}`);
     throw new Error(`Failed to analyze audio duration: ${analysisResponse.status} - ${errorText}`);
   }
   
   const analysisData = await analysisResponse.json();
+  console.log(`Audio duration analysis result: ${JSON.stringify(analysisData)}`);
   return analysisData.duration;
 }
 
-// Function to wait for job completion
+// Function to wait for job completion - FIXED: Added correct API path
 async function waitForJobCompletion(jobId: string, accessToken: string): Promise<void> {
   let jobStatus = "Running";
   let attempts = 0;
@@ -351,7 +373,8 @@ async function waitForJobCompletion(jobId: string, accessToken: string): Promise
     attempts++;
     await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds between checks
     
-    const statusResponse = await fetchWithRetry(`${DOLBY_API_URL}/media/jobs/${jobId}`, {
+    console.log(`Checking job status for job ${jobId} (attempt ${attempts}/${maxAttempts})`);
+    const statusResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_API_MEDIA_PREFIX}/jobs/${jobId}`, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${accessToken}`
@@ -360,6 +383,7 @@ async function waitForJobCompletion(jobId: string, accessToken: string): Promise
     
     if (!statusResponse.ok) {
       const errorText = await statusResponse.text();
+      console.error(`Job status error: ${statusResponse.status} - ${errorText}`);
       throw new Error(`Failed to check job status: ${statusResponse.status} - ${errorText}`);
     }
     
@@ -369,6 +393,7 @@ async function waitForJobCompletion(jobId: string, accessToken: string): Promise
     
     if (jobStatus === "Failed") {
       const errorDetails = statusData.error || {};
+      console.error(`Job failed with details: ${JSON.stringify(errorDetails)}`);
       throw new Error(`Dolby job failed with details: ${JSON.stringify(errorDetails)}`);
     }
   }
