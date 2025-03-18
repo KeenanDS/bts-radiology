@@ -11,6 +11,7 @@ import {
   MAX_RETRIES,
   RETRY_DELAY_MS,
   DOLBY_API_URL,
+  DOLBY_API_AUTH_PREFIX,
   DOLBY_API_MEDIA_PREFIX
 } from "../constants.ts";
 import { fetchWithRetry } from "../generate-podcast/utils.ts";
@@ -31,9 +32,9 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     console.log(`Using narration: ${narrationUrl}`);
     console.log(`Using background music: ${backgroundMusicUrl}`);
     
-    // Step 1: Get access token from Dolby
+    // Step 1: Get access token from Dolby - Auth endpoints use /v1 prefix
     console.log("Requesting Dolby.io access token...");
-    const tokenResponse = await fetch(`${DOLBY_API_URL}/v1/auth/token`, {
+    const tokenResponse = await fetch(`${DOLBY_API_URL}${DOLBY_API_AUTH_PREFIX}/token`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -70,7 +71,7 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     const musicBuffer = await musicResponse.arrayBuffer();
     console.log(`Successfully downloaded background music: ${musicBuffer.byteLength} bytes`);
     
-    // Step 4: Upload narration to Dolby.io - FIXED: Added correct API path
+    // Step 4: Upload narration to Dolby.io - Media endpoints don't use /v1 prefix
     console.log("Requesting Dolby.io input URL for narration");
     const narrationUploadResponse = await fetch(`${DOLBY_API_URL}${DOLBY_API_MEDIA_PREFIX}/input`, {
       method: "POST",
@@ -89,7 +90,7 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     
     const narrationUploadData = await narrationUploadResponse.json();
     const narrationUploadUrl = narrationUploadData.url;
-    const narrationDolbyUrl = narrationUploadData.url.split("?")[0]; // URL without query params for API calls
+    const narrationDolbyUrl = narrationUploadUrl.split("?")[0]; // URL without query params for API calls
     console.log(`Got Dolby.io input URL for narration: ${narrationDolbyUrl}`);
     
     // Upload narration audio to Dolby.io
@@ -109,7 +110,7 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     }
     console.log("Successfully uploaded narration audio to Dolby.io");
     
-    // Step 5: Upload background music to Dolby.io - FIXED: Added correct API path
+    // Step 5: Upload background music to Dolby.io - Media endpoints don't use /v1 prefix
     console.log("Requesting Dolby.io input URL for background music");
     const musicUploadResponse = await fetch(`${DOLBY_API_URL}${DOLBY_API_MEDIA_PREFIX}/input`, {
       method: "POST",
@@ -128,7 +129,7 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     
     const musicUploadData = await musicUploadResponse.json();
     const musicUploadUrl = musicUploadData.url;
-    const musicDolbyUrl = musicUploadData.url.split("?")[0]; // URL without query params for API calls
+    const musicDolbyUrl = musicUploadUrl.split("?")[0]; // URL without query params for API calls
     console.log(`Got Dolby.io input URL for background music: ${musicDolbyUrl}`);
     
     // Upload background music to Dolby.io
@@ -148,15 +149,15 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     }
     console.log("Successfully uploaded background music to Dolby.io");
     
-    // Step 6: Enhance the narration audio for better quality - FIXED: Added correct API path
+    // Step 6: Enhance the narration audio for better quality - Media endpoints don't use /v1 prefix
     console.log("Enhancing narration audio for better speech quality");
     const enhancedNarrationUrl = await enhanceNarrationAudio(narrationDolbyUrl, accessToken);
     
-    // Step 7: Get audio durations - FIXED: Added correct API path
+    // Step 7: Get audio durations - Media endpoints don't use /v1 prefix
     const narrationDuration = await getAudioDuration(enhancedNarrationUrl, accessToken);
     console.log(`Narration duration: ${narrationDuration} seconds`);
     
-    // Step 8: Build the audio mix with intro/outro - FIXED: Added correct API path
+    // Step 8: Build the audio mix with intro/outro - Media endpoints don't use /v1 prefix
     console.log("Creating master mix with intro/outro music");
     const outputUrl = await createAudioMix(enhancedNarrationUrl, musicDolbyUrl, narrationDuration, accessToken);
     
@@ -185,7 +186,7 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
   }
 }
 
-// Function to enhance narration audio for better speech quality - FIXED: Added correct API path
+// Function to enhance narration audio for better speech quality - Media endpoints don't use /v1 prefix
 async function enhanceNarrationAudio(inputUrl: string, accessToken: string): Promise<string> {
   // Create output location
   console.log("Creating Dolby.io output location for enhanced narration");
@@ -207,7 +208,7 @@ async function enhanceNarrationAudio(inputUrl: string, accessToken: string): Pro
   const outputUrl = outputData.url;
   console.log(`Created output location: ${outputUrl}`);
   
-  // Use Media Enhance to improve voice clarity - FIXED: Added correct API path
+  // Use Media Enhance to improve voice clarity - Media endpoints don't use /v1 prefix
   console.log("Submitting enhance job to Dolby.io");
   const enhanceJobResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_API_MEDIA_PREFIX}/enhance`, {
     method: "POST",
@@ -246,7 +247,7 @@ async function enhanceNarrationAudio(inputUrl: string, accessToken: string): Pro
   return outputUrl;
 }
 
-// Function to create the audio mix with intro/outro music - FIXED: Added correct API path
+// Function to create the audio mix with intro/outro music - Media endpoints don't use /v1 prefix
 async function createAudioMix(narrationUrl: string, musicUrl: string, narrationDuration: number, accessToken: string): Promise<string> {
   // Create output location
   console.log("Creating Dolby.io output location for final mix");
@@ -271,7 +272,7 @@ async function createAudioMix(narrationUrl: string, musicUrl: string, narrationD
   // Calculate the start time for the outro music (from the end of the narration)
   const outroStartTime = Math.max(0, narrationDuration - OUTRO_DURATION);
   
-  // Create and process the audio mix job with intro/outro segments - FIXED: Added correct API path
+  // Create and process the audio mix job with intro/outro segments - Media endpoints don't use /v1 prefix
   console.log("Creating audio mix with intro and outro segments");
   
   const mixJobResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_API_MEDIA_PREFIX}/mix`, {
@@ -342,7 +343,7 @@ async function createAudioMix(narrationUrl: string, musicUrl: string, narrationD
   return outputUrl;
 }
 
-// Function to get audio duration using Dolby.io API - FIXED: Added correct API path
+// Function to get audio duration using Dolby.io API - Media endpoints don't use /v1 prefix
 async function getAudioDuration(audioUrl: string, accessToken: string): Promise<number> {
   console.log(`Getting audio duration for: ${audioUrl}`);
   const analysisResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_API_MEDIA_PREFIX}/analyze?url=${encodeURIComponent(audioUrl)}`, {
@@ -363,7 +364,7 @@ async function getAudioDuration(audioUrl: string, accessToken: string): Promise<
   return analysisData.duration;
 }
 
-// Function to wait for job completion - FIXED: Added correct API path
+// Function to wait for job completion - Media endpoints don't use /v1 prefix
 async function waitForJobCompletion(jobId: string, accessToken: string): Promise<void> {
   let jobStatus = "Running";
   let attempts = 0;

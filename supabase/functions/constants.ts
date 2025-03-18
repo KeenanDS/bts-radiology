@@ -22,4 +22,5 @@ export const RETRY_DELAY_MS = 2000;
 
 // Dolby.io API URLs
 export const DOLBY_API_URL = "https://api.dolby.io";
-export const DOLBY_API_MEDIA_PREFIX = "/v1/media"; // Added correct API version prefix
+export const DOLBY_API_AUTH_PREFIX = "/v1/auth"; // Auth endpoints use /v1 prefix
+export const DOLBY_API_MEDIA_PREFIX = "/media"; // Media endpoints don't use /v1 prefix
