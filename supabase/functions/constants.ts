@@ -15,3 +15,7 @@ export const INTRO_DURATION = 50;
 export const INTRO_FADE_DURATION = 5;
 export const OUTRO_DURATION = 30;
 export const OUTRO_FADE_DURATION = 5;
+
+// Retry settings
+export const MAX_RETRIES = 3;
+export const RETRY_DELAY_MS = 2000;
