@@ -9,7 +9,10 @@ import {
   OUTRO_DURATION,
   OUTRO_FADE_DURATION,
   MAX_RETRIES,
-  RETRY_DELAY_MS
+  RETRY_DELAY_MS,
+  DOLBY_API_URL,
+  DOLBY_AUTH_PATH,
+  DOLBY_MEDIA_PATH
 } from "../constants.ts";
 import { fetchWithRetry } from "../generate-podcast/utils.ts";
 
@@ -30,7 +33,8 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     console.log(`Using background music: ${backgroundMusicUrl}`);
     
     // Step 1: Get access token from Dolby
-    const tokenResponse = await fetch("https://api.dolby.io/v1/auth/token", {
+    console.log("Step 1: Getting Dolby.io access token");
+    const tokenResponse = await fetch(`${DOLBY_API_URL}${DOLBY_AUTH_PATH}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -48,20 +52,36 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     const accessToken = tokenData.access_token;
     console.log("Successfully obtained Dolby.io access token");
     
-    // Step 2: First enhance the narration audio for better quality
-    console.log("Step 1: Enhancing narration audio for better speech quality");
-    const enhancedNarrationUrl = await enhanceNarrationAudio(narrationUrl, accessToken);
+    // Step 2: Get Dolby input URLs for both narration and background music
+    console.log("Step 2: Getting Dolby.io input URLs");
+    const narrationDolbyUrl = await getDolbyInputUrl(accessToken);
+    console.log(`Got Dolby input URL for narration: ${narrationDolbyUrl}`);
     
-    // Step 3: Get audio durations
+    const backgroundMusicDolbyUrl = await getDolbyInputUrl(accessToken);
+    console.log(`Got Dolby input URL for background music: ${backgroundMusicDolbyUrl}`);
+    
+    // Step 3: Download files from Supabase and upload to Dolby
+    console.log("Step 3a: Downloading narration from Supabase and uploading to Dolby");
+    await downloadAndUploadToDolby(narrationUrl, narrationDolbyUrl, accessToken);
+    
+    console.log("Step 3b: Downloading background music from Supabase and uploading to Dolby");
+    await downloadAndUploadToDolby(backgroundMusicUrl, backgroundMusicDolbyUrl, accessToken);
+    
+    // Step 4: Enhance the narration audio for better quality
+    console.log("Step 4: Enhancing narration audio for better speech quality");
+    const enhancedNarrationUrl = await enhanceNarrationAudio(narrationDolbyUrl, accessToken);
+    
+    // Step 5: Get audio durations
+    console.log("Step 5: Getting audio duration");
     const narrationDuration = await getAudioDuration(enhancedNarrationUrl, accessToken);
     console.log(`Narration duration: ${narrationDuration} seconds`);
     
-    // Step 4: Build the audio mix with intro/outro
-    console.log("Step 2: Creating master mix with intro/outro music");
-    const outputUrl = await createAudioMix(enhancedNarrationUrl, backgroundMusicUrl, narrationDuration, accessToken);
+    // Step 6: Build the audio mix with intro/outro
+    console.log("Step 6: Creating master mix with intro/outro music");
+    const outputUrl = await createAudioMix(enhancedNarrationUrl, backgroundMusicDolbyUrl, narrationDuration, accessToken);
     
-    // Step 5: Download the processed file
-    console.log(`Downloading final mixed audio from ${outputUrl}`);
+    // Step 7: Download the processed file
+    console.log(`Step 7: Downloading final mixed audio from ${outputUrl}`);
     const processedAudioResponse = await fetchWithRetry(outputUrl, {
       method: "GET",
       headers: {
@@ -84,10 +104,64 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
   }
 }
 
+// Function to get a Dolby input URL for uploading files
+async function getDolbyInputUrl(accessToken: string): Promise<string> {
+  const inputResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/input`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${accessToken}`
+    },
+    body: JSON.stringify({
+      url: null // This tells Dolby to generate a URL for us to upload to
+    })
+  });
+  
+  if (!inputResponse.ok) {
+    const errorText = await inputResponse.text();
+    throw new Error(`Failed to get Dolby input URL: ${inputResponse.status} - ${errorText}`);
+  }
+  
+  const inputData = await inputResponse.json();
+  return inputData.url;
+}
+
+// Function to download file from Supabase and upload to Dolby
+async function downloadAndUploadToDolby(sourceUrl: string, dolbyUrl: string, accessToken: string): Promise<void> {
+  // Download file from Supabase
+  const fileResponse = await fetchWithRetry(sourceUrl, {
+    method: "GET"
+  });
+  
+  if (!fileResponse.ok) {
+    throw new Error(`Failed to download file from ${sourceUrl}: ${fileResponse.status}`);
+  }
+  
+  const fileBuffer = await fileResponse.arrayBuffer();
+  console.log(`Downloaded file: ${fileBuffer.byteLength} bytes`);
+  
+  // Upload file to Dolby
+  const uploadResponse = await fetchWithRetry(dolbyUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "audio/mpeg",
+      "Authorization": `Bearer ${accessToken}`
+    },
+    body: fileBuffer
+  });
+  
+  if (!uploadResponse.ok) {
+    const errorText = await uploadResponse.text();
+    throw new Error(`Failed to upload file to Dolby: ${uploadResponse.status} - ${errorText}`);
+  }
+  
+  console.log("Successfully uploaded file to Dolby");
+}
+
 // Function to enhance narration audio for better speech quality
 async function enhanceNarrationAudio(inputUrl: string, accessToken: string): Promise<string> {
   // Create output location
-  const outputResponse = await fetchWithRetry("https://api.dolby.io/media/output", {
+  const outputResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/output`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -104,7 +178,7 @@ async function enhanceNarrationAudio(inputUrl: string, accessToken: string): Pro
   const outputUrl = outputData.url;
   
   // Use Media Enhance to improve voice clarity
-  const enhanceJobResponse = await fetchWithRetry("https://api.dolby.io/media/enhance", {
+  const enhanceJobResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/enhance`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -143,7 +217,7 @@ async function enhanceNarrationAudio(inputUrl: string, accessToken: string): Pro
 // Function to create the audio mix with intro/outro music
 async function createAudioMix(narrationUrl: string, musicUrl: string, narrationDuration: number, accessToken: string): Promise<string> {
   // Create output location
-  const outputResponse = await fetchWithRetry("https://api.dolby.io/media/output", {
+  const outputResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/output`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -165,7 +239,7 @@ async function createAudioMix(narrationUrl: string, musicUrl: string, narrationD
   // Create and process the audio mix job with intro/outro segments
   console.log("Creating audio mix with intro and outro segments");
   
-  const mixJobResponse = await fetchWithRetry("https://api.dolby.io/media/mix", {
+  const mixJobResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/mix`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -234,7 +308,7 @@ async function createAudioMix(narrationUrl: string, musicUrl: string, narrationD
 
 // Function to get audio duration using Dolby.io API
 async function getAudioDuration(audioUrl: string, accessToken: string): Promise<number> {
-  const analysisResponse = await fetchWithRetry(`https://api.dolby.io/media/analyze?url=${encodeURIComponent(audioUrl)}`, {
+  const analysisResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/analyze?url=${encodeURIComponent(audioUrl)}`, {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${accessToken}`
@@ -260,7 +334,7 @@ async function waitForJobCompletion(jobId: string, accessToken: string): Promise
     attempts++;
     await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds between checks
     
-    const statusResponse = await fetchWithRetry(`https://api.dolby.io/media/jobs/${jobId}`, {
+    const statusResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/jobs/${jobId}`, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${accessToken}`
