@@ -28,20 +28,29 @@ const AudioPlayer = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(80);
-  const [musicVolume, setMusicVolume] = useState(15); // Background music at 15% by default
-  const [backgroundMusicEnabled, setBackgroundMusicEnabled] = useState(true);
+  
+  // Note: For processed podcasts, background music is already mixed in
+  // This toggles the separate background music playback only for unprocessed audio
+  const [backgroundMusicEnabled, setBackgroundMusicEnabled] = useState(false);
   
   const audioRef = useRef<HTMLAudioElement>(null);
   const backgroundMusicRef = useRef<HTMLAudioElement>(null);
+  
+  // We still allow manual music control when the user is previewing
+  // an episode without processed audio (with intro/outro)
+  const [musicVolume, setMusicVolume] = useState(15); // Background music at 15% by default
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
   const bgSourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   const bgGainNodeRef = useRef<GainNode | null>(null);
 
-  // Set up audio context and nodes for mixing
+  // Check if we have a processed audio file (with intro/outro already mixed in)
+  const isProcessedAudio = audioUrl?.includes("processed_dolby");
+
+  // Set up audio context and nodes for mixing - only needed for manual background music
   useEffect(() => {
-    if (!audioUrl || !backgroundMusicUrl || !backgroundMusicEnabled) return;
+    if (!audioUrl || !backgroundMusicUrl || !backgroundMusicEnabled || isProcessedAudio) return;
     
     const setupAudioContext = () => {
       // Create audio context if it doesn't exist
@@ -114,11 +123,11 @@ const AudioPlayer = ({
         bgGainNodeRef.current = null;
       }
     };
-  }, [audioUrl, backgroundMusicUrl, backgroundMusicEnabled]);
+  }, [audioUrl, backgroundMusicUrl, backgroundMusicEnabled, isProcessedAudio]);
   
-  // Handle background music toggle
+  // Handle background music toggle (only for non-processed audio)
   useEffect(() => {
-    if (!backgroundMusicRef.current || !backgroundMusicUrl) return;
+    if (!backgroundMusicRef.current || !backgroundMusicUrl || isProcessedAudio) return;
     
     if (backgroundMusicEnabled) {
       if (isPlaying) {
@@ -130,7 +139,7 @@ const AudioPlayer = ({
     } else {
       backgroundMusicRef.current.pause();
     }
-  }, [backgroundMusicEnabled, isPlaying, backgroundMusicUrl, musicVolume]);
+  }, [backgroundMusicEnabled, isPlaying, backgroundMusicUrl, musicVolume, isProcessedAudio]);
 
   useEffect(() => {
     const audioElement = audioRef.current;
@@ -166,8 +175,10 @@ const AudioPlayer = ({
     };
   }, [audioRef]);
 
-  // Syncing playback between narration and background music
+  // Syncing playback between narration and background music (for non-processed audio)
   useEffect(() => {
+    if (isProcessedAudio) return; // Skip for processed audio
+    
     const syncBackgroundMusic = () => {
       if (!backgroundMusicRef.current || !audioRef.current || !backgroundMusicEnabled) return;
       
@@ -203,7 +214,7 @@ const AudioPlayer = ({
     };
     
     syncBackgroundMusic();
-  }, [isPlaying, backgroundMusicEnabled, musicVolume]);
+  }, [isPlaying, backgroundMusicEnabled, musicVolume, isProcessedAudio]);
 
   // Update volume for main audio
   useEffect(() => {
@@ -214,14 +225,16 @@ const AudioPlayer = ({
     }
   }, [volume]);
   
-  // Update volume for background music
+  // Update volume for background music (only for non-processed audio)
   useEffect(() => {
+    if (isProcessedAudio) return;
+    
     if (bgGainNodeRef.current && backgroundMusicEnabled) {
       bgGainNodeRef.current.gain.value = musicVolume / 100;
     } else if (backgroundMusicRef.current) {
       backgroundMusicRef.current.volume = musicVolume / 100;
     }
-  }, [musicVolume, backgroundMusicEnabled]);
+  }, [musicVolume, backgroundMusicEnabled, isProcessedAudio]);
 
   const togglePlayPause = () => {
     if (!audioRef.current) return;
@@ -283,7 +296,7 @@ const AudioPlayer = ({
         <audio ref={audioRef} src={audioUrl} preload="metadata" />
       )}
       
-      {backgroundMusicUrl && (
+      {backgroundMusicUrl && !isProcessedAudio && (
         <audio ref={backgroundMusicRef} src={backgroundMusicUrl} loop preload="metadata" />
       )}
       
@@ -292,6 +305,11 @@ const AudioPlayer = ({
         <div className="flex-1">
           <h3 className="text-white font-medium text-sm truncate">{title}</h3>
           <p className="text-gray-400 text-xs">{subtitle}</p>
+          {isProcessedAudio && (
+            <span className="text-xs text-green-400 mt-1 inline-block">
+              Enhanced with intro/outro music
+            </span>
+          )}
         </div>
         {showDownload && audioUrl && (
           <Button
@@ -361,7 +379,7 @@ const AudioPlayer = ({
         </div>
       </div>
       
-      {backgroundMusicUrl && (
+      {backgroundMusicUrl && !isProcessedAudio && (
         <div className="mt-4 pt-3 border-t border-white/10 space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
