@@ -24,3 +24,6 @@ export const RETRY_DELAY_MS = 2000;
 export const DOLBY_API_URL = "https://api.dolby.com";  // Base URL
 export const DOLBY_AUTH_PATH = "/v1/auth/token";       // Auth endpoint
 export const DOLBY_MEDIA_PATH = "/media";              // Media endpoints base path
+export const DOLBY_INPUT_PATH = "dlb://in/";           // Standard path for input files
+export const DOLBY_OUTPUT_PATH = "dlb://out/";         // Standard path for output files
+

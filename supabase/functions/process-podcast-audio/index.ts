@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -52,10 +53,16 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     console.log("Successfully obtained Dolby.io access token");
     
     // Step 2: Get Dolby input URLs for both narration and background music
-    // We need to request temporary upload URLs with url: null
-    console.log("Step 2: Getting Dolby.io input URLs");
+    // We need to specify explicit dlb:// paths when requesting temporary upload URLs
+    console.log("Step 2: Getting Dolby.io input URLs with explicit paths");
     
-    // For narration
+    // Generate unique identifiers for file paths to avoid conflicts
+    const timestamp = Date.now().toString();
+    
+    // For narration - use a specific dlb:// path
+    const narrationDlbPath = `dlb://in/narration_${timestamp}.mp3`;
+    console.log(`Requesting upload URL for path: ${narrationDlbPath}`);
+    
     const narrationInputResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/input`, {
       method: "POST",
       headers: {
@@ -63,7 +70,7 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
         "Authorization": `Bearer ${accessToken}`
       },
       body: JSON.stringify({
-        url: null // Request a temporary URL for upload
+        url: narrationDlbPath // Specify a dlb:// path for the uploaded file
       })
     });
     
@@ -74,11 +81,14 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     
     const narrationInputData = await narrationInputResponse.json();
     const narrationUploadUrl = narrationInputData.url;
-    const narrationDolbyUrl = narrationInputData.url_info.name; // This contains the dlb:// URL
+    // We'll use the original dlb:// path we specified for later processing
     console.log(`Got Dolby upload URL for narration: ${narrationUploadUrl}`);
-    console.log(`Got Dolby dlb:// URL for narration: ${narrationDolbyUrl}`);
+    console.log(`Using dlb:// path for narration: ${narrationDlbPath}`);
     
-    // For background music
+    // For background music - use a specific dlb:// path
+    const musicDlbPath = `dlb://in/background_music_${timestamp}.mp3`;
+    console.log(`Requesting upload URL for path: ${musicDlbPath}`);
+    
     const backgroundMusicInputResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/input`, {
       method: "POST",
       headers: {
@@ -86,7 +96,7 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
         "Authorization": `Bearer ${accessToken}`
       },
       body: JSON.stringify({
-        url: null // Request a temporary URL for upload
+        url: musicDlbPath // Specify a dlb:// path for the uploaded file
       })
     });
     
@@ -97,9 +107,9 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     
     const backgroundMusicInputData = await backgroundMusicInputResponse.json();
     const backgroundMusicUploadUrl = backgroundMusicInputData.url;
-    const backgroundMusicDolbyUrl = backgroundMusicInputData.url_info.name; // This contains the dlb:// URL
+    // We'll use the original dlb:// path we specified for later processing
     console.log(`Got Dolby upload URL for background music: ${backgroundMusicUploadUrl}`);
-    console.log(`Got Dolby dlb:// URL for background music: ${backgroundMusicDolbyUrl}`);
+    console.log(`Using dlb:// path for background music: ${musicDlbPath}`);
     
     // Step 3: Download files from Supabase and upload to Dolby
     console.log("Step 3a: Downloading narration from Supabase and uploading to Dolby");
@@ -161,9 +171,9 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     console.log("Successfully uploaded background music to Dolby");
     
     // Step 4: Enhance the narration audio for better quality
-    // Now use the dlb:// URLs for further processing
+    // Now use the dlb:// paths for further processing
     console.log("Step 4: Enhancing narration audio for better speech quality");
-    const enhancedNarrationUrl = await enhanceNarrationAudio(narrationDolbyUrl, accessToken);
+    const enhancedNarrationUrl = await enhanceNarrationAudio(narrationDlbPath, accessToken);
     
     // Step 5: Get audio durations
     console.log("Step 5: Getting audio duration");
@@ -172,7 +182,7 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     
     // Step 6: Build the audio mix with intro/outro
     console.log("Step 6: Creating master mix with intro/outro music");
-    const outputUrl = await createAudioMix(enhancedNarrationUrl, backgroundMusicDolbyUrl, narrationDuration, accessToken);
+    const outputUrl = await createAudioMix(enhancedNarrationUrl, musicDlbPath, narrationDuration, accessToken);
     
     // Step 7: Download the processed file
     console.log(`Step 7: Downloading final mixed audio from ${outputUrl}`);
@@ -212,13 +222,20 @@ async function downloadAndUploadToDolby(sourceUrl: string, dolbyUrl: string, acc
 
 // Function to enhance narration audio for better speech quality
 async function enhanceNarrationAudio(inputUrl: string, accessToken: string): Promise<string> {
-  // Create output location
+  // Create output location with explicit dlb:// path
+  const timestamp = Date.now().toString();
+  const outputDlbPath = `dlb://out/enhanced_narration_${timestamp}.mp3`;
+  console.log(`Requesting output URL for path: ${outputDlbPath}`);
+  
   const outputResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/output`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${accessToken}`
-    }
+    },
+    body: JSON.stringify({
+      url: outputDlbPath // Specify the output path
+    })
   });
   
   if (!outputResponse.ok) {
@@ -229,7 +246,7 @@ async function enhanceNarrationAudio(inputUrl: string, accessToken: string): Pro
   const outputData = await outputResponse.json();
   const outputUrl = outputData.url;
   console.log(`Got Dolby output URL: ${outputUrl}`);
-  console.log(`Output dlb:// URL: ${outputData.url_info.name}`);
+  console.log(`Using output dlb:// path: ${outputDlbPath}`);
   
   // Use Media Enhance to improve voice clarity
   const enhanceJobResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/enhance`, {
@@ -240,7 +257,7 @@ async function enhanceNarrationAudio(inputUrl: string, accessToken: string): Pro
     },
     body: JSON.stringify({
       input: inputUrl,
-      output: outputData.url_info.name, // Use the dlb:// URL
+      output: outputDlbPath, // Use the explicit dlb:// path
       content: {
         type: "podcast"
       },
@@ -270,13 +287,20 @@ async function enhanceNarrationAudio(inputUrl: string, accessToken: string): Pro
 
 // Function to create the audio mix with intro/outro music
 async function createAudioMix(narrationUrl: string, musicUrl: string, narrationDuration: number, accessToken: string): Promise<string> {
-  // Create output location
+  // Create output location with explicit dlb:// path
+  const timestamp = Date.now().toString();
+  const outputDlbPath = `dlb://out/final_mix_${timestamp}.mp3`;
+  console.log(`Requesting output URL for mix path: ${outputDlbPath}`);
+  
   const outputResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/output`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${accessToken}`
-    }
+    },
+    body: JSON.stringify({
+      url: outputDlbPath // Specify the output path
+    })
   });
   
   if (!outputResponse.ok) {
@@ -287,7 +311,7 @@ async function createAudioMix(narrationUrl: string, musicUrl: string, narrationD
   const outputData = await outputResponse.json();
   const outputUrl = outputData.url;
   console.log(`Got Dolby output URL for mix: ${outputUrl}`);
-  console.log(`Output dlb:// URL for mix: ${outputData.url_info.name}`);
+  console.log(`Using output dlb:// path for mix: ${outputDlbPath}`);
   
   // Calculate the start time for the outro music (from the end of the narration)
   const outroStartTime = Math.max(0, narrationDuration - OUTRO_DURATION);
@@ -343,7 +367,7 @@ async function createAudioMix(narrationUrl: string, musicUrl: string, narrationD
           }
         }
       ],
-      output: outputData.url_info.name // Use the dlb:// URL
+      output: outputDlbPath // Use the explicit dlb:// path
     })
   });
   
@@ -618,3 +642,4 @@ serve(async (req) => {
     );
   }
 });
+
