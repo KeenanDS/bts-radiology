@@ -20,6 +20,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { processEpisodeAudio } from "../../../app/utils/audioProcessing";
 
 interface PodcastHistoryItemProps {
   episode: PodcastEpisode;
@@ -191,27 +192,18 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
     try {
       toast({
         title: "Processing Audio",
-        description: "Enhancing podcast audio with Dolby.io. This may take a few minutes...",
+        description: "Merging podcast audio with background music. This may take a few minutes...",
       });
 
-      const { data, error } = await supabase.functions.invoke(
-        "process-podcast-audio",
-        {
-          body: { episodeId: episode.id },
-        }
-      );
+      const result = await processEpisodeAudio(episode.id);
 
-      if (error) {
-        throw error;
-      }
-
-      if (!data || !data.success) {
-        throw new Error(data?.error || "Failed to process podcast audio");
+      if (!result.success) {
+        throw new Error(result.error || "Failed to process podcast audio");
       }
 
       toast({
         title: "Success",
-        description: "Podcast audio enhanced with Dolby.io!",
+        description: "Podcast audio processed successfully!",
       });
       
       if (onRefresh) {
