@@ -14,6 +14,8 @@ import {
   DOLBY_MEDIA_PATH
 } from "../constants.ts";
 import { fetchWithRetry } from "../generate-podcast/utils.ts";
+// @deno-types="npm:@types/crunker"
+import { Crunker } from "npm:crunker@2.4.0";
 
 // Environment variables
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -24,184 +26,45 @@ const dolbyApiSecret = Deno.env.get("DOLBY_API_SECRET");
 // Initialize Supabase client
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Process audio with Dolby.io using a simplified approach
-async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl: string): Promise<ArrayBuffer> {
+// Process audio with Crunker using a simplified approach
+async function processPodcastWithCrunker(narrationUrl: string, backgroundMusicUrl: string): Promise<ArrayBuffer> {
   try {
-    console.log(`Starting Dolby.io audio processing with music`);
+    console.log(`Starting Crunker audio processing with music`);
     console.log(`Using narration: ${narrationUrl}`);
     console.log(`Using background music: ${backgroundMusicUrl}`);
     
-    // Step 1: Get access token from Dolby
-    console.log("Step 1: Getting Dolby.io access token");
-    const tokenResponse = await fetch(`${DOLBY_API_URL}${DOLBY_AUTH_PATH}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": `Basic ${btoa(`${dolbyApiKey}:${dolbyApiSecret}`)}`
-      },
-      body: "grant_type=client_credentials&expires_in=1800"
-    });
+    // Initialize Crunker
+    const crunker = new Crunker();
     
-    if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text();
-      throw new Error(`Failed to get Dolby.io access token: ${tokenResponse.status} - ${errorText}`);
-    }
+    // Fetch both audio files
+    console.log("Fetching audio files...");
+    const audioBuffers = await crunker.fetchAudio(narrationUrl, backgroundMusicUrl);
+    console.log("Successfully fetched audio files");
     
-    const tokenData = await tokenResponse.json();
-    const accessToken = tokenData.access_token;
-    console.log("Successfully obtained Dolby.io access token");
+    // Get the narration and background music buffers
+    const [narrationBuffer, musicBuffer] = audioBuffers;
     
-    // Step 2: Get Dolby input URLs for both narration and background music
-    // We need to specify explicit dlb:// paths when requesting temporary upload URLs
-    console.log("Step 2: Getting Dolby.io input URLs with explicit paths");
-    
-    // Generate unique identifiers for file paths to avoid conflicts
-    const timestamp = Date.now().toString();
-    
-    // For narration - use a specific dlb:// path
-    const narrationDlbPath = `dlb://in/narration_${timestamp}.mp3`;
-    console.log(`Requesting upload URL for path: ${narrationDlbPath}`);
-    
-    const narrationInputResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/input`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({
-        url: narrationDlbPath // Specify a dlb:// path for the uploaded file
-      })
-    });
-    
-    if (!narrationInputResponse.ok) {
-      const errorText = await narrationInputResponse.text();
-      throw new Error(`Failed to get Dolby input URL for narration: ${narrationInputResponse.status} - ${errorText}`);
-    }
-    
-    const narrationInputData = await narrationInputResponse.json();
-    const narrationUploadUrl = narrationInputData.url;
-    // We'll use the original dlb:// path we specified for later processing
-    console.log(`Got Dolby upload URL for narration: ${narrationUploadUrl}`);
-    console.log(`Using dlb:// path for narration: ${narrationDlbPath}`);
-    
-    // For background music - use a specific dlb:// path
-    const musicDlbPath = `dlb://in/background_music_${timestamp}.mp3`;
-    console.log(`Requesting upload URL for path: ${musicDlbPath}`);
-    
-    const backgroundMusicInputResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/input`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({
-        url: musicDlbPath // Specify a dlb:// path for the uploaded file
-      })
-    });
-    
-    if (!backgroundMusicInputResponse.ok) {
-      const errorText = await backgroundMusicInputResponse.text();
-      throw new Error(`Failed to get Dolby input URL for background music: ${backgroundMusicInputResponse.status} - ${errorText}`);
-    }
-    
-    const backgroundMusicInputData = await backgroundMusicInputResponse.json();
-    const backgroundMusicUploadUrl = backgroundMusicInputData.url;
-    // We'll use the original dlb:// path we specified for later processing
-    console.log(`Got Dolby upload URL for background music: ${backgroundMusicUploadUrl}`);
-    console.log(`Using dlb:// path for background music: ${musicDlbPath}`);
-    
-    // Step 3: Download files from Supabase and upload to Dolby
-    console.log("Step 3a: Downloading narration from Supabase and uploading to Dolby");
-    // First, download the file from Supabase URL
-    const narrationResponse = await fetchWithRetry(narrationUrl, {
-      method: "GET"
-    });
-    
-    if (!narrationResponse.ok) {
-      throw new Error(`Failed to download narration from ${narrationUrl}: ${narrationResponse.status}`);
-    }
-    
-    const narrationBuffer = await narrationResponse.arrayBuffer();
-    console.log(`Downloaded narration file: ${narrationBuffer.byteLength} bytes`);
-    
-    // Then, upload to Dolby using the temporary URL
-    const narrationUploadResponse = await fetchWithRetry(narrationUploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "audio/mpeg",
-      },
-      body: narrationBuffer
-    });
-    
-    if (!narrationUploadResponse.ok) {
-      const errorText = await narrationUploadResponse.text();
-      throw new Error(`Failed to upload narration to Dolby: ${narrationUploadResponse.status} - ${errorText}`);
-    }
-    
-    console.log("Successfully uploaded narration to Dolby");
-    
-    console.log("Step 3b: Downloading background music from Supabase and uploading to Dolby");
-    // First, download the file from Supabase URL
-    const musicResponse = await fetchWithRetry(backgroundMusicUrl, {
-      method: "GET"
-    });
-    
-    if (!musicResponse.ok) {
-      throw new Error(`Failed to download background music from ${backgroundMusicUrl}: ${musicResponse.status}`);
-    }
-    
-    const musicBuffer = await musicResponse.arrayBuffer();
-    console.log(`Downloaded background music file: ${musicBuffer.byteLength} bytes`);
-    
-    // Then, upload to Dolby using the temporary URL
-    const musicUploadResponse = await fetchWithRetry(backgroundMusicUploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "audio/mpeg",
-      },
-      body: musicBuffer
-    });
-    
-    if (!musicUploadResponse.ok) {
-      const errorText = await musicUploadResponse.text();
-      throw new Error(`Failed to upload background music to Dolby: ${musicUploadResponse.status} - ${errorText}`);
-    }
-    
-    console.log("Successfully uploaded background music to Dolby");
-    
-    // Step 4: Use the narration directly without enhancement
-    console.log("Step 4: Using narration audio directly (skipping enhancement)");
-    // We'll use the original narration path directly instead of enhancing it
-    
-    // Step 5: Get audio durations
-    console.log("Step 5: Getting audio duration");
-    const narrationDuration = await getAudioDuration(narrationDlbPath, accessToken);
-    console.log(`Narration duration: ${narrationDuration} seconds`);
-    
-    // Step 6: Build the audio mix with intro/outro
-    console.log("Step 6: Creating master mix with intro/outro music");
-    const outputUrl = await createAudioMix(narrationDlbPath, musicDlbPath, narrationDuration, accessToken);
-    
-    // Step 7: Download the processed file
-    console.log(`Step 7: Downloading final mixed audio from ${outputUrl}`);
-    const processedAudioResponse = await fetchWithRetry(outputUrl, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`
+    // Create the final mix by merging the audio
+    console.log("Creating audio mix...");
+    const mergedAudio = await crunker.mergeAudio([
+      narrationBuffer,  // Original volume for narration
+      {
+        buffer: musicBuffer,
+        volume: 0.3     // Reduce background music volume to 30%
       }
-    });
+    ]);
     
-    if (!processedAudioResponse.ok) {
-      const errorText = await processedAudioResponse.text();
-      throw new Error(`Failed to download processed audio: ${processedAudioResponse.status} - ${errorText}`);
-    }
+    // Export as MP3
+    console.log("Exporting audio as MP3...");
+    const output = await crunker.export(mergedAudio, "audio/mp3");
     
-    const processedAudioBuffer = await processedAudioResponse.arrayBuffer();
-    console.log(`Successfully downloaded processed audio: ${processedAudioBuffer.byteLength} bytes`);
+    // Convert blob to ArrayBuffer
+    const arrayBuffer = await output.blob.arrayBuffer();
+    console.log(`Successfully processed audio: ${arrayBuffer.byteLength} bytes`);
     
-    return processedAudioBuffer;
+    return arrayBuffer;
   } catch (error) {
-    console.error(`Error in Dolby processing: ${error.message}`);
+    console.error(`Error in Crunker processing: ${error.message}`);
     throw error;
   }
 }
@@ -384,20 +247,6 @@ serve(async (req) => {
   }
 
   try {
-    // Check if Dolby credentials are set
-    if (!dolbyApiKey || !dolbyApiSecret) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: "Dolby.io API credentials are not configured"
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
     // Parse request
     const { episodeId } = await req.json();
     
@@ -479,15 +328,15 @@ serve(async (req) => {
     console.log(`Using background music: ${backgroundMusicUrl}`);
 
     try {
-      // Process the podcast audio with Dolby.io
-      const processedAudioBuffer = await processPodcastWithDolby(
+      // Process the podcast audio with Crunker
+      const processedAudioBuffer = await processPodcastWithCrunker(
         episode.audio_url, 
         backgroundMusicUrl
       );
       
       // Create a timestamp-based filename for the processed file
       const timestamp = new Date().toISOString().replace(/[-:.]/g, "");
-      const outputFileName = `podcast_${episodeId}_processed_dolby_${timestamp}.mp3`;
+      const outputFileName = `podcast_${episodeId}_processed_crunker_${timestamp}.mp3`;
       const filePath = `podcast_audio/${outputFileName}`;
       
       // Create a File object from the processed audio buffer

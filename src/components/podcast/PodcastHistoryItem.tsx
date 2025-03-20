@@ -78,14 +78,14 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
         return (
           <div className="flex items-center text-yellow-400 text-xs font-medium">
             <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-            Processing with Dolby.io
+            Processing audio
           </div>
         );
       case "completed":
         return (
           <div className="flex items-center text-green-400 text-xs font-medium">
             <Check className="h-3 w-3 mr-1" />
-            Enhanced with Dolby.io
+            Audio enhanced
           </div>
         );
       case "error":
@@ -439,7 +439,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
             <div className="mt-4">
               <div className="flex items-center text-gray-300 text-sm mb-2">
                 <Music className="h-4 w-4 mr-2" />
-                Enhanced Audio with Dolby.io
+                Enhanced Audio
               </div>
               <AudioPlayer 
                 audioUrl={episode.processed_audio_url} 
@@ -470,12 +470,12 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
                   {isProcessingAudio ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Enhancing Audio with Dolby.io...
+                      Enhancing Audio...
                     </>
                   ) : (
                     <>
                       <Music className="mr-2 h-4 w-4" />
-                      Enhance with Dolby.io
+                      Enhance Audio
                     </>
                   )}
                 </Button>
