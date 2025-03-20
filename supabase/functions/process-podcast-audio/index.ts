@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -170,19 +169,18 @@ async function processPodcastWithDolby(narrationUrl: string, backgroundMusicUrl:
     
     console.log("Successfully uploaded background music to Dolby");
     
-    // Step 4: Enhance the narration audio for better quality
-    // Now use the dlb:// paths for further processing
-    console.log("Step 4: Enhancing narration audio for better speech quality");
-    const enhancedNarrationUrl = await enhanceNarrationAudio(narrationDlbPath, accessToken);
+    // Step 4: Use the narration directly without enhancement
+    console.log("Step 4: Using narration audio directly (skipping enhancement)");
+    // We'll use the original narration path directly instead of enhancing it
     
     // Step 5: Get audio durations
     console.log("Step 5: Getting audio duration");
-    const narrationDuration = await getAudioDuration(enhancedNarrationUrl, accessToken);
+    const narrationDuration = await getAudioDuration(narrationDlbPath, accessToken);
     console.log(`Narration duration: ${narrationDuration} seconds`);
     
     // Step 6: Build the audio mix with intro/outro
     console.log("Step 6: Creating master mix with intro/outro music");
-    const outputUrl = await createAudioMix(enhancedNarrationUrl, musicDlbPath, narrationDuration, accessToken);
+    const outputUrl = await createAudioMix(narrationDlbPath, musicDlbPath, narrationDuration, accessToken);
     
     // Step 7: Download the processed file
     console.log(`Step 7: Downloading final mixed audio from ${outputUrl}`);
@@ -218,71 +216,6 @@ async function getDolbyInputUrl(accessToken: string): Promise<string> {
 // This function is replaced by direct upload in the main function
 async function downloadAndUploadToDolby(sourceUrl: string, dolbyUrl: string, accessToken: string): Promise<void> {
   // ... keep existing code
-}
-
-// Function to enhance narration audio for better speech quality
-async function enhanceNarrationAudio(inputUrl: string, accessToken: string): Promise<string> {
-  // Create output location with explicit dlb:// path
-  const timestamp = Date.now().toString();
-  const outputDlbPath = `dlb://out/enhanced_narration_${timestamp}.mp3`;
-  console.log(`Requesting output URL for path: ${outputDlbPath}`);
-  
-  const outputResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/output`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${accessToken}`
-    },
-    body: JSON.stringify({
-      url: outputDlbPath // Specify the output path
-    })
-  });
-  
-  if (!outputResponse.ok) {
-    const errorText = await outputResponse.text();
-    throw new Error(`Failed to create output location: ${outputResponse.status} - ${errorText}`);
-  }
-  
-  const outputData = await outputResponse.json();
-  const outputUrl = outputData.url;
-  console.log(`Got Dolby output URL: ${outputUrl}`);
-  console.log(`Using output dlb:// path: ${outputDlbPath}`);
-  
-  // Use Media Enhance to improve voice clarity
-  const enhanceJobResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/enhance`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${accessToken}`
-    },
-    body: JSON.stringify({
-      input: inputUrl,
-      output: outputDlbPath, // Use the explicit dlb:// path
-      content: {
-        type: "podcast"
-      },
-      audio: {
-        speech: {
-          enhance: true,
-          noise_reduction: true
-        }
-      }
-    })
-  });
-  
-  if (!enhanceJobResponse.ok) {
-    const errorText = await enhanceJobResponse.text();
-    throw new Error(`Failed to create enhancement job: ${enhanceJobResponse.status} - ${errorText}`);
-  }
-  
-  const enhanceJobData = await enhanceJobResponse.json();
-  const jobId = enhanceJobData.job_id;
-  console.log(`Created enhancement job: ${jobId}`);
-  
-  // Wait for job completion
-  await waitForJobCompletion(jobId, accessToken);
-  
-  return outputUrl;
 }
 
 // Function to create the audio mix with intro/outro music
