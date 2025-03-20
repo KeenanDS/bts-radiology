@@ -8,236 +8,118 @@ import {
   OUTRO_DURATION,
   OUTRO_FADE_DURATION,
   MAX_RETRIES,
-  RETRY_DELAY_MS,
-  DOLBY_API_URL,
-  DOLBY_AUTH_PATH,
-  DOLBY_MEDIA_PATH
+  RETRY_DELAY_MS
 } from "../constants.ts";
 import { fetchWithRetry } from "../generate-podcast/utils.ts";
-// @deno-types="npm:@types/crunker"
-import { Crunker } from "npm:crunker@2.4.0";
 
 // Environment variables
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const dolbyApiKey = Deno.env.get("DOLBY_API_KEY");
-const dolbyApiSecret = Deno.env.get("DOLBY_API_SECRET");
 
 // Initialize Supabase client
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Process audio with Crunker using a simplified approach
-async function processPodcastWithCrunker(narrationUrl: string, backgroundMusicUrl: string): Promise<ArrayBuffer> {
+// Simple function to merge episode audio with background music
+async function mergeAudioFiles(narrationUrl: string, backgroundMusicUrl: string): Promise<ArrayBuffer> {
   try {
-    console.log(`Starting Crunker audio processing with music`);
+    console.log(`Starting audio merge process`);
     console.log(`Using narration: ${narrationUrl}`);
     console.log(`Using background music: ${backgroundMusicUrl}`);
     
-    // Initialize Crunker
-    const crunker = new Crunker();
+    // Download both audio files
+    console.log("Downloading narration audio...");
+    const narrationResponse = await fetchWithRetry(narrationUrl, {
+      method: "GET",
+      headers: { "Content-Type": "audio/mpeg" }
+    });
+    if (!narrationResponse.ok) {
+      throw new Error(`Failed to download narration: ${narrationResponse.status}`);
+    }
+    const narrationBuffer = await narrationResponse.arrayBuffer();
     
-    // Fetch both audio files
-    console.log("Fetching audio files...");
-    const audioBuffers = await crunker.fetchAudio(narrationUrl, backgroundMusicUrl);
-    console.log("Successfully fetched audio files");
+    console.log("Downloading background music...");
+    const musicResponse = await fetchWithRetry(backgroundMusicUrl, {
+      method: "GET",
+      headers: { "Content-Type": "audio/mpeg" }
+    });
+    if (!musicResponse.ok) {
+      throw new Error(`Failed to download background music: ${musicResponse.status}`);
+    }
+    const musicBuffer = await musicResponse.arrayBuffer();
     
-    // Get the narration and background music buffers
-    const [narrationBuffer, musicBuffer] = audioBuffers;
+    // Create audio context
+    const audioContext = new AudioContext();
     
-    // Create the final mix by merging the audio
-    console.log("Creating audio mix...");
-    const mergedAudio = await crunker.mergeAudio([
-      narrationBuffer,  // Original volume for narration
-      {
-        buffer: musicBuffer,
-        volume: 0.3     // Reduce background music volume to 30%
-      }
+    // Decode both audio files
+    console.log("Decoding audio files...");
+    const [narrationAudio, musicAudio] = await Promise.all([
+      audioContext.decodeAudioData(narrationBuffer),
+      audioContext.decodeAudioData(musicBuffer)
     ]);
     
-    // Export as MP3
-    console.log("Exporting audio as MP3...");
-    const output = await crunker.export(mergedAudio, "audio/mp3");
+    // Calculate durations
+    const narrationDuration = narrationAudio.duration;
+    const totalDuration = narrationDuration + INTRO_DURATION + OUTRO_DURATION;
     
-    // Convert blob to ArrayBuffer
-    const arrayBuffer = await output.blob.arrayBuffer();
-    console.log(`Successfully processed audio: ${arrayBuffer.byteLength} bytes`);
-    
-    return arrayBuffer;
-  } catch (error) {
-    console.error(`Error in Crunker processing: ${error.message}`);
-    throw error;
-  }
-}
-
-// Function to get a Dolby input URL for uploading files
-// We'll keep this but it's not used directly anymore since we need to access the dlb:// URL
-async function getDolbyInputUrl(accessToken: string): Promise<string> {
-  // ... keep existing code
-}
-
-// Function to download file from Supabase and upload to Dolby
-// This function is replaced by direct upload in the main function
-async function downloadAndUploadToDolby(sourceUrl: string, dolbyUrl: string, accessToken: string): Promise<void> {
-  // ... keep existing code
-}
-
-// Function to create the audio mix with intro/outro music
-async function createAudioMix(narrationUrl: string, musicUrl: string, narrationDuration: number, accessToken: string): Promise<string> {
-  // Create output location with explicit dlb:// path
-  const timestamp = Date.now().toString();
-  const outputDlbPath = `dlb://out/final_mix_${timestamp}.mp3`;
-  console.log(`Requesting output URL for mix path: ${outputDlbPath}`);
-  
-  const outputResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/output`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${accessToken}`
-    },
-    body: JSON.stringify({
-      url: outputDlbPath // Specify the output path
-    })
-  });
-  
-  if (!outputResponse.ok) {
-    const errorText = await outputResponse.text();
-    throw new Error(`Failed to create output location: ${outputResponse.status} - ${errorText}`);
-  }
-  
-  const outputData = await outputResponse.json();
-  const outputUrl = outputData.url;
-  console.log(`Got Dolby output URL for mix: ${outputUrl}`);
-  console.log(`Using output dlb:// path for mix: ${outputDlbPath}`);
-  
-  // Calculate the start time for the outro music (from the end of the narration)
-  const outroStartTime = Math.max(0, narrationDuration - OUTRO_DURATION);
-  
-  // Create and process the audio mix job with intro/outro segments
-  console.log("Creating audio mix with intro and outro segments");
-  
-  const mixJobResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/mix`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${accessToken}`
-    },
-    body: JSON.stringify({
-      inputs: [
-        // Main narration track
-        {
-          source: narrationUrl,
-          gain: 0 // 0dB (default level)
-        },
-        // Intro music segment
-        {
-          source: musicUrl,
-          segment: {
-            start: 0,
-            duration: INTRO_DURATION
-          },
-          destination: {
-            start: 0
-          },
-          gain: -12, // -12dB (background level)
-          fade: {
-            out: {
-              duration: INTRO_FADE_DURATION
-            }
-          }
-        },
-        // Outro music segment
-        {
-          source: musicUrl,
-          segment: {
-            start: 0,
-            duration: OUTRO_DURATION
-          },
-          destination: {
-            start: outroStartTime
-          },
-          gain: -12, // -12dB (background level)
-          fade: {
-            in: {
-              duration: OUTRO_FADE_DURATION
-            }
-          }
-        }
-      ],
-      output: outputDlbPath // Use the explicit dlb:// path
-    })
-  });
-  
-  if (!mixJobResponse.ok) {
-    const errorText = await mixJobResponse.text();
-    throw new Error(`Failed to create mix job: ${mixJobResponse.status} - ${errorText}`);
-  }
-  
-  const mixJobData = await mixJobResponse.json();
-  const jobId = mixJobData.job_id;
-  console.log(`Created audio mix job: ${jobId}`);
-  
-  // Wait for job completion
-  await waitForJobCompletion(jobId, accessToken);
-  
-  return outputUrl;
-}
-
-// Function to get audio duration using Dolby.io API
-async function getAudioDuration(audioUrl: string, accessToken: string): Promise<number> {
-  // For analyze endpoint, we need to use the URL parameter
-  const analysisResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/analyze?url=${encodeURIComponent(audioUrl)}`, {
-    method: "GET",
-    headers: {
-      "Authorization": `Bearer ${accessToken}`
-    }
-  });
-  
-  if (!analysisResponse.ok) {
-    const errorText = await analysisResponse.text();
-    throw new Error(`Failed to analyze audio duration: ${analysisResponse.status} - ${errorText}`);
-  }
-  
-  const analysisData = await analysisResponse.json();
-  return analysisData.duration;
-}
-
-// Function to wait for job completion
-async function waitForJobCompletion(jobId: string, accessToken: string): Promise<void> {
-  let jobStatus = "Running";
-  let attempts = 0;
-  const maxAttempts = 60; // 5 minutes max (checking every 5 seconds)
-  
-  while (jobStatus !== "Success" && attempts < maxAttempts) {
-    attempts++;
-    await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds between checks
-    
-    const statusResponse = await fetchWithRetry(`${DOLBY_API_URL}${DOLBY_MEDIA_PATH}/jobs/${jobId}`, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`
-      }
+    // Create offline context for rendering
+    const offlineContext = new OfflineAudioContext({
+      numberOfChannels: 2,
+      length: Math.ceil(totalDuration * audioContext.sampleRate),
+      sampleRate: audioContext.sampleRate
     });
     
-    if (!statusResponse.ok) {
-      const errorText = await statusResponse.text();
-      throw new Error(`Failed to check job status: ${statusResponse.status} - ${errorText}`);
+    // Create audio sources
+    const narrationSource = offlineContext.createBufferSource();
+    narrationSource.buffer = narrationAudio;
+    
+    const musicSource = offlineContext.createBufferSource();
+    musicSource.buffer = musicAudio;
+    
+    // Create gain nodes for volume control
+    const narrationGain = offlineContext.createGain();
+    const musicGain = offlineContext.createGain();
+    
+    // Set gains
+    narrationGain.gain.value = 1.0; // Full volume for narration
+    musicGain.gain.value = 0.3; // 30% volume for background music
+    
+    // Connect nodes
+    narrationSource.connect(narrationGain);
+    musicSource.connect(musicGain);
+    narrationGain.connect(offlineContext.destination);
+    musicGain.connect(offlineContext.destination);
+    
+    // Schedule playback
+    narrationSource.start(INTRO_DURATION); // Start narration after intro
+    
+    // Loop background music if needed
+    const musicLoops = Math.ceil(totalDuration / musicAudio.duration);
+    for (let i = 0; i < musicLoops; i++) {
+      const musicSourceLoop = offlineContext.createBufferSource();
+      musicSourceLoop.buffer = musicAudio;
+      musicSourceLoop.connect(musicGain);
+      musicSourceLoop.start(i * musicAudio.duration);
     }
     
-    const statusData = await statusResponse.json();
-    jobStatus = statusData.status;
-    console.log(`Job ${jobId} status: ${jobStatus} (attempt ${attempts}/${maxAttempts})`);
+    // Fade in/out for background music
+    musicGain.gain.setValueAtTime(0, 0);
+    musicGain.gain.linearRampToValueAtTime(0.3, INTRO_FADE_DURATION);
+    musicGain.gain.setValueAtTime(0.3, totalDuration - OUTRO_FADE_DURATION);
+    musicGain.gain.linearRampToValueAtTime(0, totalDuration);
     
-    if (jobStatus === "Failed") {
-      const errorDetails = statusData.error || {};
-      throw new Error(`Dolby job failed with details: ${JSON.stringify(errorDetails)}`);
-    }
+    // Render audio
+    console.log("Rendering final audio...");
+    const renderedBuffer = await offlineContext.startRendering();
+    
+    // Convert to WAV/MP3 format
+    const finalBuffer = renderedBuffer.getChannelData(0).buffer;
+    console.log(`Successfully rendered audio: ${finalBuffer.byteLength} bytes`);
+    
+    return finalBuffer;
+  } catch (error) {
+    console.error(`Error in audio merge process: ${error.message}`);
+    throw error;
   }
-  
-  if (jobStatus !== "Success") {
-    throw new Error(`Job did not complete successfully within the time limit`);
-  }
-  
-  console.log(`Job ${jobId} completed successfully!`);
 }
 
 serve(async (req) => {
@@ -328,15 +210,15 @@ serve(async (req) => {
     console.log(`Using background music: ${backgroundMusicUrl}`);
 
     try {
-      // Process the podcast audio with Crunker
-      const processedAudioBuffer = await processPodcastWithCrunker(
+      // Process the podcast audio with simple merge
+      const processedAudioBuffer = await mergeAudioFiles(
         episode.audio_url, 
         backgroundMusicUrl
       );
       
       // Create a timestamp-based filename for the processed file
       const timestamp = new Date().toISOString().replace(/[-:.]/g, "");
-      const outputFileName = `podcast_${episodeId}_processed_crunker_${timestamp}.mp3`;
+      const outputFileName = `podcast_${episodeId}_processed_${timestamp}.mp3`;
       const filePath = `podcast_audio/${outputFileName}`;
       
       // Create a File object from the processed audio buffer

@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Pause, Play, SkipBack, SkipForward, Volume2, Download, Music } from "lucide-react";
@@ -45,7 +46,7 @@ const AudioPlayer = ({
   const bgGainNodeRef = useRef<GainNode | null>(null);
 
   // Check if we have a processed audio file (with intro/outro already mixed in)
-  const isProcessedAudio = audioUrl?.includes("processed_crunker");
+  const isProcessedAudio = audioUrl?.includes("processed_dolby");
 
   // Set up audio context and nodes for mixing - only needed for manual background music
   useEffect(() => {
