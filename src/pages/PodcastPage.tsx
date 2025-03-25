@@ -70,6 +70,7 @@ const PodcastPage = () => {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [expandedTimeWindow, setExpandedTimeWindow] = useState(false);
+  const [backgroundMusicUrl, setBackgroundMusicUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
   const handleGeneratePodcast = async () => {
@@ -226,7 +227,7 @@ const PodcastPage = () => {
     try {
       const { data, error } = await supabase
         .from("podcast_episodes")
-        .select("podcast_script, audio_url, status")
+        .select("podcast_script, audio_url, status, processed_audio_url, background_music_url")
         .eq("id", currentEpisodeId)
         .maybeSingle();
         
@@ -239,10 +240,16 @@ const PodcastPage = () => {
       
       if (data) {
         setFullScript(data.podcast_script);
-        if (data.audio_url) {
+        
+        if (data.processed_audio_url) {
+          setAudioUrl(data.processed_audio_url);
+          setBackgroundMusicUrl(data.background_music_url);
+        } else if (data.audio_url) {
           setAudioUrl(data.audio_url);
+          setBackgroundMusicUrl(null);
         } else {
           setAudioUrl(null);
+          setBackgroundMusicUrl(null);
         }
       } else {
         toast({

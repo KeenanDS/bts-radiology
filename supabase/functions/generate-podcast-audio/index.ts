@@ -1,6 +1,8 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
+import { DEFAULT_VOICE_ID } from "../constants.ts";
 
 // Environment variables
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -9,9 +11,6 @@ const elevenLabsApiKey = Deno.env.get("ELEVENLABS_API_KEY");
 
 // Initialize Supabase client
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-// Bennet's voice ID as a fallback
-const DEFAULT_VOICE_ID = "bmAn0TLASQN7ctGBMHgN"; // Bennet's voice ID
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -184,6 +183,26 @@ serve(async (req) => {
 
     const audioUrl = publicUrlData.publicUrl;
 
+    // Create music bucket if it doesn't exist
+    const { data: musicBucketExists } = await supabase
+      .storage
+      .getBucket("podcast_music");
+
+    if (!musicBucketExists) {
+      console.log("Creating podcast_music storage bucket");
+      const { error: bucketError } = await supabase
+        .storage
+        .createBucket("podcast_music", {
+          public: true,
+          allowedMimeTypes: ["audio/mpeg"],
+          fileSizeLimit: 10485760, // 10MB
+        });
+      
+      if (bucketError) {
+        throw new Error(`Failed to create music storage bucket: ${bucketError.message}`);
+      }
+    }
+
     // Update the episode with the audio URL
     await supabase
       .from("podcast_episodes")
@@ -199,6 +218,7 @@ serve(async (req) => {
         success: true,
         episodeId,
         audioUrl,
+        message: "Raw audio generated successfully - use process-podcast-audio to add intro/outro music"
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

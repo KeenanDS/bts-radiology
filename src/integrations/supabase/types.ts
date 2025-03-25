@@ -87,36 +87,48 @@ export type Database = {
       }
       podcast_episodes: {
         Row: {
+          audio_processing_error: string | null
+          audio_processing_status: string | null
           audio_url: string | null
+          background_music_url: string | null
           created_at: string
           id: string
           is_featured: boolean | null
           news_stories: Json | null
           podcast_script: string | null
+          processed_audio_url: string | null
           scheduled_for: string
           status: string
           updated_at: string
           voice_id: string | null
         }
         Insert: {
+          audio_processing_error?: string | null
+          audio_processing_status?: string | null
           audio_url?: string | null
+          background_music_url?: string | null
           created_at?: string
           id?: string
           is_featured?: boolean | null
           news_stories?: Json | null
           podcast_script?: string | null
+          processed_audio_url?: string | null
           scheduled_for: string
           status?: string
           updated_at?: string
           voice_id?: string | null
         }
         Update: {
+          audio_processing_error?: string | null
+          audio_processing_status?: string | null
           audio_url?: string | null
+          background_music_url?: string | null
           created_at?: string
           id?: string
           is_featured?: boolean | null
           news_stories?: Json | null
           podcast_script?: string | null
+          processed_audio_url?: string | null
           scheduled_for?: string
           status?: string
           updated_at?: string

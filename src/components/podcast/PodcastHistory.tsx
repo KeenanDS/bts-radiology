@@ -15,6 +15,10 @@ export interface PodcastEpisode {
   created_at: string;
   updated_at: string;
   is_featured: boolean;
+  audio_processing_status?: string;
+  audio_processing_error?: string;
+  processed_audio_url?: string;
+  background_music_url?: string;
 }
 
 const PodcastHistory = () => {
