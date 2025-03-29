@@ -85,6 +85,45 @@ export type Database = {
           },
         ]
       }
+      payment_methods: {
+        Row: {
+          card_brand: string | null
+          card_exp_month: number | null
+          card_exp_year: number | null
+          card_last4: string | null
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          provider_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last4?: string | null
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          provider_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last4?: string | null
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          provider_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       podcast_episodes: {
         Row: {
           audio_processing_error: string | null
@@ -202,6 +241,45 @@ export type Database = {
           scheduled_for?: string
           status?: string
           topics?: Json | null
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean | null
+          created_at: string | null
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          plan_id: string | null
+          status: string
+          subscription_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id?: string | null
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id?: string | null
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
