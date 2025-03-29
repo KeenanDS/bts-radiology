@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -17,9 +17,10 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-const LoginPage = () => {
+const LoginPage: React.FC = () => {
   const { signIn } = useAuth();
   const [isLoading, setIsLoading] = React.useState(false);
+  const navigate = useNavigate();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -33,6 +34,9 @@ const LoginPage = () => {
     setIsLoading(true);
     try {
       await signIn(values.email, values.password);
+      // Navigation is now handled inside the signIn function
+    } catch (error) {
+      console.error('Login error:', error);
     } finally {
       setIsLoading(false);
     }

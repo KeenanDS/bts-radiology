@@ -21,44 +21,40 @@ import UserManagementPage from "./pages/admin/UserManagementPage";
 
 const queryClient = new QueryClient();
 
-const AppRoutes = () => (
-  <Routes>
-    <Route path="/" element={<Index />} />
-    <Route path="/login" element={<LoginPage />} />
-    <Route path="/register" element={<RegisterPage />} />
-    <Route path="/unauthorized" element={<UnauthorizedPage />} />
-    
-    {/* Protected Admin Routes */}
-    <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-    <Route path="/admin/posts" element={<ProtectedRoute><BlogPostsPage /></ProtectedRoute>} />
-    <Route path="/admin/scheduler" element={<ProtectedRoute><SchedulerPage /></ProtectedRoute>} />
-    <Route path="/admin/podcast" element={<ProtectedRoute><PodcastPage /></ProtectedRoute>} />
-    <Route path="/admin/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-    <Route path="/admin/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-    
-    {/* Global Admin Only Routes */}
-    <Route 
-      path="/admin/users" 
-      element={
-        <ProtectedRoute requiredRole="global_administrator">
-          <UserManagementPage />
-        </ProtectedRoute>
-      } 
-    />
-    
-    {/* Catch-all Route */}
-    <Route path="*" element={<NotFound />} />
-  </Routes>
-);
-
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/unauthorized" element={<UnauthorizedPage />} />
+            
+            {/* Protected Admin Routes */}
+            <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/admin/posts" element={<ProtectedRoute><BlogPostsPage /></ProtectedRoute>} />
+            <Route path="/admin/scheduler" element={<ProtectedRoute><SchedulerPage /></ProtectedRoute>} />
+            <Route path="/admin/podcast" element={<ProtectedRoute><PodcastPage /></ProtectedRoute>} />
+            <Route path="/admin/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            <Route path="/admin/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            
+            {/* Global Admin Only Routes */}
+            <Route 
+              path="/admin/users" 
+              element={
+                <ProtectedRoute requiredRole="global_administrator">
+                  <UserManagementPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Catch-all Route */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+          <Toaster />
+          <Sonner />
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
