@@ -6,16 +6,35 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useState } from "react";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useAuth } from "@/contexts/AuthContext";
+import { Badge } from "@/components/ui/badge";
 
 const Sidebar = () => {
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  const { user, userRole, signOut } = useAuth();
   
-  const handleLogout = () => {
-    // This will be implemented when we add authentication
-    console.log("User logged out");
-    // For now, just close the popover
+  const handleLogout = async () => {
+    await signOut();
     setOpen(false);
+  };
+
+  // Function to get the role badge color
+  const getRoleBadgeColor = () => {
+    switch (userRole) {
+      case 'global_administrator':
+        return 'bg-red-500/20 text-red-300 border-red-500/30';
+      case 'owner':
+        return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+      default:
+        return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+    }
+  };
+
+  // Format role name for display
+  const formatRoleName = (role: string | null) => {
+    if (!role) return 'User';
+    return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   };
   
   return (
@@ -69,6 +88,18 @@ const Sidebar = () => {
             Podcast
           </Button>
         </Link>
+
+        {userRole === 'global_administrator' && (
+          <Link to="/admin/users">
+            <Button 
+              variant="ghost" 
+              className={`w-full justify-start ${location.pathname === '/admin/users' ? 'bg-white/10 text-white' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
+            >
+              <User className="mr-2 h-5 w-5" />
+              User Management
+            </Button>
+          </Link>
+        )}
       </div>
       
       <div className="p-4 border-t border-white/10">
@@ -79,14 +110,19 @@ const Sidebar = () => {
                 <div className="w-8 h-8 bg-blue-500 rounded-full overflow-hidden">
                   <img src="https://i.pravatar.cc/100" alt="User" className="w-full h-full object-cover" />
                 </div>
-                <span className="text-white">Manu Arora</span>
+                <div className="flex flex-col items-start">
+                  <span className="text-white text-sm">{user?.email}</span>
+                  <Badge className={`text-xs ${getRoleBadgeColor()}`}>
+                    {formatRoleName(userRole)}
+                  </Badge>
+                </div>
               </div>
               <ChevronUp className={`h-4 w-4 text-white transition-transform ${open ? 'rotate-0' : 'rotate-180'}`} />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-56 p-0 bg-gray-800 border border-gray-700" align="start">
             <div className="px-2 py-1.5 text-sm font-medium text-white/80">
-              <span>manu@example.com</span>
+              <span>{user?.email}</span>
             </div>
             <Separator className="bg-gray-700" />
             <div className="p-2 space-y-1">
