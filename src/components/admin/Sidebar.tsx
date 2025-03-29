@@ -7,7 +7,6 @@ import { useState } from "react";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/AuthContext";
-import { Badge } from "@/components/ui/badge";
 
 const Sidebar = () => {
   const location = useLocation();
@@ -19,24 +18,6 @@ const Sidebar = () => {
     setOpen(false);
   };
 
-  // Function to get the role badge color
-  const getRoleBadgeColor = () => {
-    switch (userRole) {
-      case 'global_administrator':
-        return 'bg-red-500/20 text-red-300 border-red-500/30';
-      case 'owner':
-        return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
-      default:
-        return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
-    }
-  };
-
-  // Format role name for display
-  const formatRoleName = (role: string | null) => {
-    if (!role) return 'User';
-    return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-  };
-  
   return (
     <div className="w-64 bg-white/5 backdrop-blur-sm border-r border-white/10 flex flex-col h-screen">
       <div className="p-4 border-b border-white/10">
@@ -112,9 +93,6 @@ const Sidebar = () => {
                 </div>
                 <div className="flex flex-col items-start">
                   <span className="text-white text-sm">{user?.email}</span>
-                  <Badge className={`text-xs ${getRoleBadgeColor()}`}>
-                    {formatRoleName(userRole)}
-                  </Badge>
                 </div>
               </div>
               <ChevronUp className={`h-4 w-4 text-white transition-transform ${open ? 'rotate-0' : 'rotate-180'}`} />

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -14,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import Sidebar from '@/components/admin/Sidebar';
 
 type UserRoleOption = 'global_administrator' | 'owner' | 'administrator';
 
@@ -87,7 +87,6 @@ const UserManagementPage = () => {
 
       if (error) throw error;
 
-      // Update local state
       setUsers(
         users.map((user) =>
           user.id === userId ? { ...user, role: newRole } : user
@@ -111,7 +110,6 @@ const UserManagementPage = () => {
   const createNewUser = async (values: NewUserFormValues) => {
     setCreatingUser(true);
     try {
-      // First, create user in Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: values.email,
         password: values.password,
@@ -120,7 +118,6 @@ const UserManagementPage = () => {
 
       if (authError) throw authError;
 
-      // If the profile wasn't automatically created via trigger, we'll update it
       if (authData.user) {
         const { error: profileError } = await supabase
           .from('profiles')
@@ -138,11 +135,9 @@ const UserManagementPage = () => {
         description: `User ${values.email} created successfully`,
       });
 
-      // Reset form and close dialog
       form.reset();
       setInviteDialogOpen(false);
       
-      // Refresh user list
       await fetchUsers();
     } catch (error: any) {
       console.error('Error creating user:', error);
@@ -166,170 +161,176 @@ const UserManagementPage = () => {
   }
 
   return (
-    <div className="container mx-auto py-10 px-4">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center">
-              <UserCog className="mr-2 h-6 w-6" />
-              User Management
-            </CardTitle>
-            <CardDescription>
-              Manage user roles and permissions for the admin dashboard.
-            </CardDescription>
-          </div>
-          {isGlobalAdmin && (
-            <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="flex items-center">
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Add New User
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New User</DialogTitle>
-                  <DialogDescription>
-                    Add a new administrator to the platform.
-                  </DialogDescription>
-                </DialogHeader>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(createNewUser)} className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="user@example.com" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="fullName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Full Name</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="John Doe" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Password</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="password" placeholder="••••••••" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="role"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Role</FormLabel>
-                          <Select 
-                            onValueChange={field.onChange} 
-                            defaultValue={field.value}
+    <div className="min-h-screen flex bg-[#0a0b17]">
+      <Sidebar />
+      
+      <div className="flex-1 p-6 bg-gradient-to-br from-[#0a0b17] via-[#111936] to-[#0a0b17]">
+        <div className="max-w-5xl mx-auto space-y-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center">
+                  <UserCog className="mr-2 h-6 w-6" />
+                  User Management
+                </CardTitle>
+                <CardDescription>
+                  Manage user roles and permissions for the admin dashboard.
+                </CardDescription>
+              </div>
+              {isGlobalAdmin && (
+                <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="flex items-center">
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Add New User
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Create New User</DialogTitle>
+                      <DialogDescription>
+                        Add a new administrator to the platform.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <Form {...form}>
+                      <form onSubmit={form.handleSubmit(createNewUser)} className="space-y-4">
+                        <FormField
+                          control={form.control}
+                          name="email"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Email</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="user@example.com" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="fullName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Full Name</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="John Doe" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="password"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Password</FormLabel>
+                              <FormControl>
+                                <Input {...field} type="password" placeholder="••••••••" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="role"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Role</FormLabel>
+                              <Select 
+                                onValueChange={field.onChange} 
+                                defaultValue={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select a role" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="administrator">Administrator</SelectItem>
+                                  <SelectItem value="owner">Owner</SelectItem>
+                                  <SelectItem value="global_administrator">Global Administrator</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <DialogFooter>
+                          <Button type="submit" disabled={creatingUser}>
+                            {creatingUser ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Creating...
+                              </>
+                            ) : (
+                              'Create User'
+                            )}
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    </Form>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>{user.full_name || 'N/A'}</TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>
+                        {currentUser?.id !== user.id && isGlobalAdmin ? (
+                          <Select
+                            defaultValue={user.role}
+                            onValueChange={(value: UserRoleOption) => updateUserRole(user.id, value)}
                           >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select a role" />
-                              </SelectTrigger>
-                            </FormControl>
+                            <SelectTrigger className="w-40">
+                              <SelectValue placeholder="Select role" />
+                            </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="administrator">Administrator</SelectItem>
                               <SelectItem value="owner">Owner</SelectItem>
                               <SelectItem value="global_administrator">Global Administrator</SelectItem>
                             </SelectContent>
                           </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <DialogFooter>
-                      <Button type="submit" disabled={creatingUser}>
-                        {creatingUser ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Creating...
-                          </>
                         ) : (
-                          'Create User'
+                          <span className="capitalize">{user.role.replace('_', ' ')}</span>
                         )}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
-          )}
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>{user.full_name || 'N/A'}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>
-                    {currentUser?.id !== user.id && isGlobalAdmin ? (
-                      <Select
-                        defaultValue={user.role}
-                        onValueChange={(value: UserRoleOption) => updateUserRole(user.id, value)}
-                      >
-                        <SelectTrigger className="w-40">
-                          <SelectValue placeholder="Select role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="administrator">Administrator</SelectItem>
-                          <SelectItem value="owner">Owner</SelectItem>
-                          <SelectItem value="global_administrator">Global Administrator</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <span className="capitalize">{user.role.replace('_', ' ')}</span>
-                    )}
-                  </TableCell>
-                  <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    {currentUser?.id !== user.id && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => fetchUsers()}
-                      >
-                        Refresh
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                      </TableCell>
+                      <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        {currentUser?.id !== user.id && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => fetchUsers()}
+                          >
+                            Refresh
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };
