@@ -68,7 +68,8 @@ const SubscriptionSection = () => {
     try {
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: {
-          planId: 'monthly-basic', // replace with your actual plan ID
+          // Using the ProductID from Polar
+          planId: '4b272a22-57b0-4824-9d27-882d7f7a639c',
         },
       });
 
