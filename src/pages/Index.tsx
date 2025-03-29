@@ -62,19 +62,10 @@ const Index = () => {
           ) : (
             <div className="space-x-4">
               <Link to="/login" className="text-sm px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors">
-                Login
-              </Link>
-              <Link to="/register" className="text-sm px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-md transition-colors">
-                Register
+                Admin Access
               </Link>
             </div>
           )}
-          
-          <div className="pt-4">
-            <Link to="/admin" className="text-xs text-gray-600 hover:text-gray-400 transition-colors">
-              Admin Access
-            </Link>
-          </div>
         </div>
       </div>
     </div>

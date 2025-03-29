@@ -47,8 +47,8 @@ const LoginPage: React.FC = () => {
       <div className="flex flex-1 items-center justify-center">
         <div className="w-full max-w-md p-8 bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 shadow-xl">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold">Welcome Back</h1>
-            <p className="text-gray-400 mt-2">Sign in to your account</p>
+            <h1 className="text-3xl font-bold">Admin Access</h1>
+            <p className="text-gray-400 mt-2">Sign in to your administrator account</p>
           </div>
 
           <Form {...form}>
@@ -110,10 +110,7 @@ const LoginPage: React.FC = () => {
 
           <div className="mt-6 text-center text-sm">
             <p className="text-gray-400">
-              Don't have an account?{' '}
-              <Link to="/register" className="text-blue-400 hover:underline">
-                Register
-              </Link>
+              Access is restricted to administrators only
             </p>
           </div>
 

@@ -15,7 +15,6 @@ import PodcastPage from "./pages/PodcastPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 import LoginPage from "./pages/auth/LoginPage";
-import RegisterPage from "./pages/auth/RegisterPage";
 import UnauthorizedPage from "./pages/auth/UnauthorizedPage";
 import UserManagementPage from "./pages/admin/UserManagementPage";
 
@@ -29,7 +28,6 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
             
             {/* Protected Admin Routes */}
