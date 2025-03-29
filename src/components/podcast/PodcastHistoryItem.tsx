@@ -315,6 +315,8 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
   const canProcessAudio = episode.audio_url && 
                          (!episode.processed_audio_url && !episode.audio_processing_status || 
                           episode.audio_processing_status === "error");
+                          
+  const episodeTitle = episode.custom_title || `Episode ${formatDate(episode.scheduled_for)}`;
 
   return (
     <Collapsible 
@@ -326,7 +328,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
         <div className="flex justify-between items-center">
           <div className="flex flex-col">
             <div className="text-white font-medium">
-              Episode {formatDate(episode.scheduled_for)}
+              {episodeTitle}
               {episode.is_featured && (
                 <span className="ml-2 text-yellow-400 text-xs font-medium">
                   ★ Featured
@@ -443,7 +445,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
               </div>
               <AudioPlayer 
                 audioUrl={episode.processed_audio_url} 
-                title={`Episode ${formatDate(episode.scheduled_for)} (Enhanced)`}
+                title={episodeTitle + " (Enhanced)"}
                 subtitle="Beyond the Scan"
                 showDownload={true}
               />
@@ -456,7 +458,7 @@ const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: Pod
               </div>
               <AudioPlayer 
                 audioUrl={episode.audio_url} 
-                title={`Episode ${formatDate(episode.scheduled_for)}`}
+                title={episodeTitle}
                 subtitle="Beyond the Scan"
                 showDownload={true}
               />

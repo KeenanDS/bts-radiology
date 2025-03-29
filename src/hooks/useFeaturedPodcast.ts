@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 export interface FeaturedPodcast {
   id: string;
   title?: string;
+  custom_title?: string;
   audio_url?: string;
   scheduled_for: string;
   status: string;
@@ -30,7 +31,8 @@ export const useFeaturedPodcast = () => {
         if (data.success && data.podcast) {
           setPodcast({
             id: data.podcast.id,
-            title: `Episode ${new Date(data.podcast.scheduled_for).toLocaleDateString()}`,
+            title: data.podcast.custom_title || `Episode ${new Date(data.podcast.scheduled_for).toLocaleDateString()}`,
+            custom_title: data.podcast.custom_title,
             audio_url: data.podcast.audio_url,
             scheduled_for: data.podcast.scheduled_for,
             status: data.podcast.status,

@@ -92,6 +92,7 @@ export type Database = {
           audio_url: string | null
           background_music_url: string | null
           created_at: string
+          custom_title: string | null
           id: string
           is_featured: boolean | null
           news_stories: Json | null
@@ -108,6 +109,7 @@ export type Database = {
           audio_url?: string | null
           background_music_url?: string | null
           created_at?: string
+          custom_title?: string | null
           id?: string
           is_featured?: boolean | null
           news_stories?: Json | null
@@ -124,6 +126,7 @@ export type Database = {
           audio_url?: string | null
           background_music_url?: string | null
           created_at?: string
+          custom_title?: string | null
           id?: string
           is_featured?: boolean | null
           news_stories?: Json | null

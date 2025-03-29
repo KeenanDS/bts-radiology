@@ -15,6 +15,7 @@ export interface PodcastEpisode {
   created_at: string;
   updated_at: string;
   is_featured: boolean;
+  custom_title?: string | null;
   audio_processing_status?: string;
   audio_processing_error?: string;
   processed_audio_url?: string;
