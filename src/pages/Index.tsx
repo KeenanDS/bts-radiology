@@ -1,3 +1,4 @@
+
 import AudioPlayer from "@/components/AudioPlayer";
 import { Link } from "react-router-dom";
 import { useFeaturedPodcast } from "@/hooks/useFeaturedPodcast";
@@ -32,9 +33,8 @@ const Index = () => {
             </div> : <AudioPlayer audioUrl={podcast?.audio_url || ""} title={podcast?.title || "No episodes available"} subtitle="Beyond the Scan Podcast by RadiologyJobs.com" coverImage="/lovable-uploads/680415d4-8d9a-4b0a-ab9f-afac4617df38.png" />}
         </div>
 
-        <div className="max-w-2xl mx-auto text-center px-4">
-          <h2 className="text-lg font-medium text-white mb-4">ABOUT</h2>
-          <p className="text-gray-400 leading-relaxed">Beyond the Scan – a bi-weekly podcast where our AI host JACKIE dives into breakthrough medical technologies and healthcare innovations. Perfect for busy professionals looking to stay informed on the latest advancements reshaping patient care and medical practice. Tune in every two weeks for concise, engaging episodes that fit seamlessly into your schedule. Where will healthcare innovation take us next? Join JACKIE to find out.</p>
+        <div className="max-w-2xl mx-auto text-center px-4 mt-16">
+          <p className="text-sm text-gray-400 leading-relaxed">Beyond the Scan – a bi-weekly podcast where our AI host JACKIE dives into breakthrough medical technologies and healthcare innovations. Perfect for busy professionals looking to stay informed on the latest advancements reshaping patient care and medical practice. Tune in every two weeks for concise, engaging episodes that fit seamlessly into your schedule. Where will healthcare innovation take us next? Join JACKIE to find out.</p>
         </div>
         
         <div className="mt-16 text-center">
