@@ -8,8 +8,19 @@ const Index = () => {
   const { podcast, isLoading, error } = useFeaturedPodcast();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-900 via-neutral-800 to-neutral-900 flex flex-col items-center justify-center p-6">
-      <div className="max-w-4xl w-full text-center space-y-20">
+    <div 
+      className="min-h-screen flex flex-col items-center justify-center p-6 relative"
+      style={{
+        backgroundImage: "url('/lovable-uploads/286f6792-c5bc-4bb7-b3dd-66a7b0e629df.png')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat"
+      }}
+    >
+      {/* Overlay for better readability */}
+      <div className="absolute inset-0 bg-black bg-opacity-70"></div>
+      
+      <div className="max-w-4xl w-full text-center space-y-20 relative z-10">
         <div className="space-y-4">
           <h1 className="text-7xl font-bold text-white tracking-tight">
             RadiologyJobs
