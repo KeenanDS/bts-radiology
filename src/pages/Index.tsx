@@ -21,9 +21,7 @@ const Index = () => {
         <div className="space-y-4">
           <h1 className="text-7xl font-bold text-white tracking-tight">Beyond The Scan</h1>
           <p className="text-2xl text-gray-400">Listen To The Latest Episode</p>
-          <div className="text-sm uppercase tracking-widest text-gray-500 mt-8">
-            Listen to the latest episode
-          </div>
+          <div className="text-sm uppercase tracking-widest text-gray-500 mt-8">PRESENTED BY RADIOLOGYJOBS.COM</div>
         </div>
 
         <div className="flex justify-center w-full px-4">
