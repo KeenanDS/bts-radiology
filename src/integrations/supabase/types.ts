@@ -85,42 +85,123 @@ export type Database = {
           },
         ]
       }
+      payment_methods: {
+        Row: {
+          card_brand: string | null
+          card_exp_month: number | null
+          card_exp_year: number | null
+          card_last4: string | null
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          provider_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last4?: string | null
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          provider_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last4?: string | null
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          provider_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       podcast_episodes: {
         Row: {
+          audio_processing_error: string | null
+          audio_processing_status: string | null
           audio_url: string | null
+          background_music_url: string | null
           created_at: string
+          custom_title: string | null
           id: string
           is_featured: boolean | null
           news_stories: Json | null
           podcast_script: string | null
+          processed_audio_url: string | null
           scheduled_for: string
           status: string
           updated_at: string
           voice_id: string | null
         }
         Insert: {
+          audio_processing_error?: string | null
+          audio_processing_status?: string | null
           audio_url?: string | null
+          background_music_url?: string | null
           created_at?: string
+          custom_title?: string | null
           id?: string
           is_featured?: boolean | null
           news_stories?: Json | null
           podcast_script?: string | null
+          processed_audio_url?: string | null
           scheduled_for: string
           status?: string
           updated_at?: string
           voice_id?: string | null
         }
         Update: {
+          audio_processing_error?: string | null
+          audio_processing_status?: string | null
           audio_url?: string | null
+          background_music_url?: string | null
           created_at?: string
+          custom_title?: string | null
           id?: string
           is_featured?: boolean | null
           news_stories?: Json | null
           podcast_script?: string | null
+          processed_audio_url?: string | null
           scheduled_for?: string
           status?: string
           updated_at?: string
           voice_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
         }
         Relationships: []
       }
@@ -163,15 +244,67 @@ export type Database = {
         }
         Relationships: []
       }
+      subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean | null
+          created_at: string | null
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          plan_id: string | null
+          status: string
+          subscription_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id?: string | null
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id?: string | null
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_role: {
+        Args: Record<PropertyKey, never>
+        Returns: Database["public"]["Enums"]["user_role"]
+      }
+      is_global_administrator: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      user_has_role: {
+        Args: {
+          required_role: Database["public"]["Enums"]["user_role"]
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      user_role: "global_administrator" | "owner" | "administrator"
     }
     CompositeTypes: {
       [_ in never]: never

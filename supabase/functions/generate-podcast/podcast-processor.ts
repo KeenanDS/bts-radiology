@@ -1,3 +1,4 @@
+
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { collectNewsStoriesRaw, convertToStructuredJson } from "./news-service.ts";
@@ -13,6 +14,30 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Explicitly define Bennet's voice ID
 const BENNET_VOICE_ID = "bmAn0TLASQN7ctGBMHgN";
+
+// Generate a descriptive title based on news stories
+async function generateDescriptiveTitle(newsStories) {
+  try {
+    // Call the dedicated title generation function
+    const response = await supabase.functions.invoke('generate-podcast-title', {
+      body: { newsStories }
+    });
+
+    if (response.error) {
+      throw new Error(`Error calling title generation function: ${response.error.message}`);
+    }
+
+    if (response.data && response.data.custom_title) {
+      return response.data.custom_title;
+    }
+
+    // Fallback title if generation fails
+    return "Beyond the Scan - Medical Imaging Insights";
+  } catch (error) {
+    console.error(`Error in generateDescriptiveTitle: ${error.message}`);
+    return "Beyond the Scan - Medical Imaging Insights";
+  }
+}
 
 export async function processPodcastRequest(scheduledFor: string) {
   try {
@@ -68,11 +93,19 @@ export async function processPodcastRequest(scheduledFor: string) {
         }
       }
 
-      // Update episode with search results
+      // Generate a descriptive title if we have news stories
+      let customTitle = "Beyond the Scan - Medical Imaging Insights";
+      if (newsStories.length > 0) {
+        customTitle = await generateDescriptiveTitle(newsStories);
+        console.log(`Generated custom title: ${customTitle}`);
+      }
+
+      // Update episode with search results and custom title
       await supabase
         .from("podcast_episodes")
         .update({
           news_stories: newsStories,
+          custom_title: customTitle,
           status: newsStories.length > 0 ? "generating_script" : "error",
           error_message: newsStories.length === 0 ? `No news stories found within the last ${searchedTimeWindow} days. Search attempts: ${JSON.stringify(searchAttempts)}` : null,
           voice_id: BENNET_VOICE_ID, // Ensure voice_id is maintained during updates
@@ -112,6 +145,7 @@ export async function processPodcastRequest(scheduledFor: string) {
         episodeId,
         newsStories,
         scriptPreview: podcastScript.substring(0, 500) + "...",
+        customTitle,
         searchedTimeWindow,
         searchAttempts,
       };
