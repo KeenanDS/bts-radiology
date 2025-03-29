@@ -54,8 +54,6 @@ serve(async (req) => {
         });
       }
 
-      console.log(`Creating checkout for plan ID: ${planId}`);
-
       // Create checkout session with Polar API
       const checkoutResponse = await fetch(`${polarApiUrl}/checkout/sessions`, {
         method: 'POST',
@@ -77,14 +75,13 @@ serve(async (req) => {
       if (!checkoutResponse.ok) {
         const errorData = await checkoutResponse.json();
         console.error('Polar API error:', errorData);
-        return new Response(JSON.stringify({ error: 'Failed to create checkout session', details: errorData }), {
+        return new Response(JSON.stringify({ error: 'Failed to create checkout session' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: checkoutResponse.status,
         });
       }
 
       const checkoutData = await checkoutResponse.json();
-      console.log('Checkout session created successfully');
       
       return new Response(JSON.stringify({ url: checkoutData.url }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -98,7 +95,7 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error('Error creating checkout session:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error', details: error.message }), {
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
     });
