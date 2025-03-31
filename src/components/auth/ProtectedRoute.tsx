@@ -22,9 +22,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   useEffect(() => {
     const checkStripeReturn = async () => {
       const stripeRedirect = localStorage.getItem('stripe_checkout_redirect');
+      const checkoutStatus = new URLSearchParams(location.search).get('checkout');
       
-      if (stripeRedirect === 'true' && !user) {
-        console.log('Attempting to recover session after Stripe checkout');
+      if ((stripeRedirect === 'true' || checkoutStatus) && !user) {
+        console.log('Attempting to recover session after Stripe checkout, status:', checkoutStatus);
         setIsRecovering(true);
         
         // Try to refresh the session
@@ -43,7 +44,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     };
     
     checkStripeReturn();
-  }, [user, location.pathname]);
+  }, [user, location.pathname, location.search]);
 
   // While checking authentication status or recovering session, show loading
   if (isLoading || isRecovering) {
@@ -69,6 +70,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   if (requiredRole === 'owner' && userRole !== 'owner' && userRole !== 'global_administrator') {
     return <Navigate to="/unauthorized" replace />;
+  }
+
+  // Check for return from checkout and clean up URL if needed
+  const checkoutStatus = new URLSearchParams(location.search).get('checkout');
+  if (checkoutStatus && location.pathname === '/admin/settings') {
+    // We're already on the correct page, just need to clean the URL
+    window.history.replaceState({}, document.title, '/admin/settings');
   }
 
   // All administrators, owners and global admins can access default admin routes

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Home, ArrowLeft } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const NotFound = () => {
   const location = useLocation();
@@ -14,29 +15,47 @@ const NotFound = () => {
   useEffect(() => {
     console.error(
       "404 Error: User attempted to access non-existent route:",
-      location.pathname
+      location.pathname,
+      "Search params:",
+      location.search
     );
 
-    // Check if we're returning from an external site and might be in a post-checkout state
-    const checkForRecovery = async () => {
-      const stripeRedirect = localStorage.getItem('stripe_checkout_redirect');
-      if (stripeRedirect === 'true') {
-        setIsRecovering(true);
-        // Clear the flag
-        localStorage.removeItem('stripe_checkout_redirect');
-        // Wait a moment to let auth check complete
-        setTimeout(() => {
-          if (user) {
-            navigate('/admin/settings');
+    // Check if we're returning from Stripe checkout
+    const checkoutStatus = new URLSearchParams(location.search).get('checkout');
+    
+    if (checkoutStatus) {
+      console.log("Detected checkout return params:", checkoutStatus);
+      
+      // Attempt to recover the session and redirect
+      setIsRecovering(true);
+      
+      // Try to recover the session
+      const recoverSession = async () => {
+        try {
+          const { data, error } = await supabase.auth.getSession();
+          
+          if (data?.session) {
+            console.log("Successfully recovered session, redirecting to admin settings");
+            localStorage.removeItem('stripe_checkout_redirect');
+            
+            // Use timeout to ensure state is updated
+            setTimeout(() => {
+              // Redirect to settings page but with clean URL
+              navigate('/admin/settings', { replace: true });
+            }, 100);
           } else {
+            console.error("Failed to recover session:", error);
             setIsRecovering(false);
           }
-        }, 2000);
-      }
-    };
-
-    checkForRecovery();
-  }, [location.pathname, user]);
+        } catch (err) {
+          console.error("Error recovering session:", err);
+          setIsRecovering(false);
+        }
+      };
+      
+      recoverSession();
+    }
+  }, [location, navigate]);
 
   if (isLoading || isRecovering) {
     return (

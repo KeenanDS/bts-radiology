@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/admin/Sidebar';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,6 +7,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import SubscriptionSection from '@/components/settings/SubscriptionSection';
 import UserManagementSection from '@/components/settings/UserManagementSection';
+import { useLocation, useNavigate } from 'react-router-dom';
+import Loader2 from '@/components/ui/loader2';
 
 const SettingsPage = () => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -15,10 +16,12 @@ const SettingsPage = () => {
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(true);
+  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
   const { toast } = useToast();
   const { user, isOwner, isGlobalAdmin } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  // Check if user is owner or global admin
   const canAccessBilling = isOwner || isGlobalAdmin;
 
   const handlePasswordUpdate = async (e: React.FormEvent) => {
@@ -76,6 +79,49 @@ const SettingsPage = () => {
       description: "Your preference has been saved",
     });
   };
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const checkoutStatus = searchParams.get('checkout');
+    
+    if (checkoutStatus) {
+      console.log('Processing checkout return with status:', checkoutStatus);
+      setIsProcessingCheckout(true);
+      
+      if (window.history && window.history.replaceState) {
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+      
+      if (checkoutStatus === 'success') {
+        toast({
+          title: 'Success',
+          description: 'Your subscription has been activated!',
+        });
+      } else if (checkoutStatus === 'canceled') {
+        toast({
+          title: 'Checkout canceled',
+          description: 'You have canceled the subscription process',
+        });
+      }
+      
+      setTimeout(() => setIsProcessingCheckout(false), 500);
+    }
+  }, [location.search, toast]);
+
+  if (isProcessingCheckout) {
+    return (
+      <div className="flex h-screen bg-gray-900 text-white">
+        <Sidebar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
+            <p className="text-xl">Processing checkout result...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-900 text-white">

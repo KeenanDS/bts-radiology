@@ -76,9 +76,12 @@ serve(async (req) => {
         console.log(`Created new Stripe customer: ${customerId}`);
       }
 
+      // Build URLs with origin and handle potential missing origin
+      const origin = req.headers.get('Origin') || '';
+      
       // Default URLs with better fallbacks
-      const defaultSuccessUrl = `${req.headers.get('Origin') || ''}/admin/settings?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
-      const defaultCancelUrl = `${req.headers.get('Origin') || ''}/admin/settings?checkout=canceled`;
+      const defaultSuccessUrl = `${origin}/admin/settings?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
+      const defaultCancelUrl = `${origin}/admin/settings?checkout=canceled`;
 
       // Create checkout session
       const session = await stripe.checkout.sessions.create({
