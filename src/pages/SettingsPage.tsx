@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import SubscriptionSection from '@/components/settings/SubscriptionSection';
 import UserManagementSection from '@/components/settings/UserManagementSection';
 import { useLocation, useNavigate } from 'react-router-dom';
-import Loader2 from '@/components/ui/loader2';
+import { Loader2 } from 'lucide-react';
 
 const SettingsPage = () => {
   const [currentPassword, setCurrentPassword] = useState('');
