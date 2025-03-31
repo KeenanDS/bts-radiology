@@ -34,6 +34,10 @@ const SubscriptionSection = () => {
   const { toast } = useToast();
   const { user } = useAuth();
 
+  // This is the Stripe Price ID for your subscription plan
+  // Replace with your actual Stripe Price ID
+  const STRIPE_PRICE_ID = 'price_1OqAT32aJLe3tGpTpLw2v2fA'; // Example ID, replace with your actual price ID
+
   const fetchSubscriptionData = async () => {
     setLoading(true);
     try {
@@ -68,7 +72,7 @@ const SubscriptionSection = () => {
     try {
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: {
-          planId: 'monthly-basic', // replace with your actual plan ID
+          priceId: STRIPE_PRICE_ID,
         },
       });
 
@@ -76,7 +80,11 @@ const SubscriptionSection = () => {
         throw error;
       }
 
-      // Redirect to Polar checkout page
+      if (!data.url) {
+        throw new Error('No checkout URL returned');
+      }
+
+      // Redirect to Stripe checkout page
       window.location.href = data.url;
     } catch (error) {
       console.error('Error creating checkout session:', error);

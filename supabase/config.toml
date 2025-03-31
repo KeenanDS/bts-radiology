@@ -68,3 +68,9 @@ verify_jwt = false
 verify_jwt = false
 [functions.process-podcast-audio]
 verify_jwt = false
+[functions.create-checkout]
+verify_jwt = false
+[functions.get-subscription]
+verify_jwt = false
+[functions.stripe-webhook]
+verify_jwt = false
