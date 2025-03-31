@@ -134,7 +134,7 @@ const SubscriptionSection = () => {
                 <Star className="h-6 w-6 text-blue-400" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-lg font-medium text-white">Premium Plan</h3>
+                <h3 className="text-lg font-medium text-white">API and Operations Cost</h3>
                 <ul className="space-y-1">
                   <li className="flex items-center text-gray-300">
                     <Check className="h-4 w-4 text-blue-400 mr-2" /> 
