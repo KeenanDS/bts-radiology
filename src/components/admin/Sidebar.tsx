@@ -69,18 +69,6 @@ const Sidebar = () => {
             Podcast
           </Button>
         </Link>
-
-        {userRole === 'global_administrator' && (
-          <Link to="/admin/users">
-            <Button 
-              variant="ghost" 
-              className={`w-full justify-start ${location.pathname === '/admin/users' ? 'bg-white/10 text-white' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
-            >
-              <User className="mr-2 h-5 w-5" />
-              User Management
-            </Button>
-          </Link>
-        )}
       </div>
       
       <div className="p-4 border-t border-white/10">

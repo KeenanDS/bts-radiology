@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/admin/Sidebar';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -7,6 +6,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import SubscriptionSection from '@/components/settings/SubscriptionSection';
+import UserManagementSection from '@/components/settings/UserManagementSection';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 
 const SettingsPage = () => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -14,10 +16,13 @@ const SettingsPage = () => {
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(true);
-  const [autoSaveDrafts, setAutoSaveDrafts] = useState(false);
+  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
   const { toast } = useToast();
-  const { user, isOwner } = useAuth();
+  const { user, isOwner, isGlobalAdmin } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const canAccessBilling = isOwner || isGlobalAdmin;
 
   const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,12 +70,6 @@ const SettingsPage = () => {
       case 'emailNotifications':
         setEmailNotifications(!emailNotifications);
         break;
-      case 'darkMode':
-        setDarkMode(!darkMode);
-        break;
-      case 'autoSaveDrafts':
-        setAutoSaveDrafts(!autoSaveDrafts);
-        break;
       default:
         break;
     }
@@ -80,6 +79,49 @@ const SettingsPage = () => {
       description: "Your preference has been saved",
     });
   };
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const checkoutStatus = searchParams.get('checkout');
+    
+    if (checkoutStatus) {
+      console.log('Processing checkout return with status:', checkoutStatus);
+      setIsProcessingCheckout(true);
+      
+      if (window.history && window.history.replaceState) {
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+      
+      if (checkoutStatus === 'success') {
+        toast({
+          title: 'Success',
+          description: 'Your subscription has been activated!',
+        });
+      } else if (checkoutStatus === 'canceled') {
+        toast({
+          title: 'Checkout canceled',
+          description: 'You have canceled the subscription process',
+        });
+      }
+      
+      setTimeout(() => setIsProcessingCheckout(false), 500);
+    }
+  }, [location.search, toast]);
+
+  if (isProcessingCheckout) {
+    return (
+      <div className="flex h-screen bg-gray-900 text-white">
+        <Sidebar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
+            <p className="text-xl">Processing checkout result...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-900 text-white">
@@ -91,7 +133,7 @@ const SettingsPage = () => {
           <Tabs defaultValue="account" className="w-full">
             <TabsList className="w-full mb-8 bg-white/5">
               <TabsTrigger value="account" className="flex-1">Account</TabsTrigger>
-              {isOwner && <TabsTrigger value="billing" className="flex-1">Billing</TabsTrigger>}
+              {canAccessBilling && <TabsTrigger value="billing" className="flex-1">Billing</TabsTrigger>}
               <TabsTrigger value="preferences" className="flex-1">Preferences</TabsTrigger>
             </TabsList>
             
@@ -159,6 +201,12 @@ const SettingsPage = () => {
                 </form>
               </div>
               
+              {isGlobalAdmin && (
+                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-6 mb-8">
+                  <UserManagementSection />
+                </div>
+              )}
+              
               <div className="bg-white/5 backdrop-blur-sm rounded-lg p-6">
                 <h2 className="text-xl font-semibold text-red-400 mb-4">Danger Zone</h2>
                 <p className="text-gray-400 mb-4">Permanently delete your account and all of your content.</p>
@@ -168,7 +216,7 @@ const SettingsPage = () => {
               </div>
             </TabsContent>
             
-            {isOwner && (
+            {canAccessBilling && (
               <TabsContent value="billing">
                 <SubscriptionSection />
               </TabsContent>
@@ -189,40 +237,6 @@ const SettingsPage = () => {
                         className={`h-6 w-11 ${emailNotifications ? 'bg-blue-600' : 'bg-white/10'} rounded-full p-1 cursor-pointer transition-colors`}
                       >
                         <div className={`h-4 w-4 bg-white rounded-full transform transition-transform ${emailNotifications ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <Separator className="bg-white/10" />
-                  
-                  <div>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h3 className="font-medium">Dark Mode</h3>
-                        <p className="text-sm text-gray-400">Toggle between light and dark themes</p>
-                      </div>
-                      <div 
-                        onClick={() => toggleSwitch('darkMode')} 
-                        className={`h-6 w-11 ${darkMode ? 'bg-blue-600' : 'bg-white/10'} rounded-full p-1 cursor-pointer transition-colors`}
-                      >
-                        <div className={`h-4 w-4 bg-white rounded-full transform transition-transform ${darkMode ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <Separator className="bg-white/10" />
-                  
-                  <div>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h3 className="font-medium">Auto-save Drafts</h3>
-                        <p className="text-sm text-gray-400">Automatically save post drafts while writing</p>
-                      </div>
-                      <div 
-                        onClick={() => toggleSwitch('autoSaveDrafts')} 
-                        className={`h-6 w-11 ${autoSaveDrafts ? 'bg-blue-600' : 'bg-white/10'} rounded-full p-1 cursor-pointer transition-colors`}
-                      >
-                        <div className={`h-4 w-4 bg-white rounded-full transform transition-transform ${autoSaveDrafts ? 'translate-x-5' : 'translate-x-0'}`}></div>
                       </div>
                     </div>
                   </div>

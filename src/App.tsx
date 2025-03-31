@@ -16,7 +16,6 @@ import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 import LoginPage from "./pages/auth/LoginPage";
 import UnauthorizedPage from "./pages/auth/UnauthorizedPage";
-import UserManagementPage from "./pages/admin/UserManagementPage";
 
 const queryClient = new QueryClient();
 
@@ -37,16 +36,6 @@ const App = () => (
             <Route path="/admin/podcast" element={<ProtectedRoute><PodcastPage /></ProtectedRoute>} />
             <Route path="/admin/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/admin/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-            
-            {/* Global Admin Only Routes */}
-            <Route 
-              path="/admin/users" 
-              element={
-                <ProtectedRoute requiredRole="global_administrator">
-                  <UserManagementPage />
-                </ProtectedRoute>
-              } 
-            />
             
             {/* Catch-all Route */}
             <Route path="*" element={<NotFound />} />
