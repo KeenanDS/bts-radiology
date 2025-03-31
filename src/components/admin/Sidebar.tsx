@@ -71,12 +71,12 @@ const Sidebar = () => {
         </Link>
       </div>
       
-      {/* View Landing Link - Added just above the profile section */}
-      <div className="px-4 pb-2">
+      {/* View Landing Link - positioned at the bottom, above the profile section */}
+      <div className="mt-auto mb-2 px-4">
         <Link to="/" target="_blank" rel="noopener noreferrer">
           <Button 
-            variant="outline" 
-            className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/10 border-white/20"
+            variant="ghost" 
+            className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/10"
           >
             <Home className="mr-2 h-5 w-5" />
             View Landing
