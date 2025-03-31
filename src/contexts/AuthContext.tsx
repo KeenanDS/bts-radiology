@@ -105,7 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         title: 'Success',
         description: 'Account created successfully. Please check your email for verification.',
       });
-      navigate('/login');
+      navigate('/admin-login');
     } catch (error) {
       console.error('Error in signUp:', error);
       toast({
