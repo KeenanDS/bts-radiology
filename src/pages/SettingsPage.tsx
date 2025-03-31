@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import SubscriptionSection from '@/components/settings/SubscriptionSection';
+import UserManagementSection from '@/components/settings/UserManagementSection';
 
 const SettingsPage = () => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -14,8 +15,6 @@ const SettingsPage = () => {
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(true);
-  const [autoSaveDrafts, setAutoSaveDrafts] = useState(false);
   const { toast } = useToast();
   const { user, isOwner, isGlobalAdmin } = useAuth();
 
@@ -67,12 +66,6 @@ const SettingsPage = () => {
     switch (setting) {
       case 'emailNotifications':
         setEmailNotifications(!emailNotifications);
-        break;
-      case 'darkMode':
-        setDarkMode(!darkMode);
-        break;
-      case 'autoSaveDrafts':
-        setAutoSaveDrafts(!autoSaveDrafts);
         break;
       default:
         break;
@@ -162,6 +155,12 @@ const SettingsPage = () => {
                 </form>
               </div>
               
+              {isGlobalAdmin && (
+                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-6 mb-8">
+                  <UserManagementSection />
+                </div>
+              )}
+              
               <div className="bg-white/5 backdrop-blur-sm rounded-lg p-6">
                 <h2 className="text-xl font-semibold text-red-400 mb-4">Danger Zone</h2>
                 <p className="text-gray-400 mb-4">Permanently delete your account and all of your content.</p>
@@ -192,40 +191,6 @@ const SettingsPage = () => {
                         className={`h-6 w-11 ${emailNotifications ? 'bg-blue-600' : 'bg-white/10'} rounded-full p-1 cursor-pointer transition-colors`}
                       >
                         <div className={`h-4 w-4 bg-white rounded-full transform transition-transform ${emailNotifications ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <Separator className="bg-white/10" />
-                  
-                  <div>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h3 className="font-medium">Dark Mode</h3>
-                        <p className="text-sm text-gray-400">Toggle between light and dark themes</p>
-                      </div>
-                      <div 
-                        onClick={() => toggleSwitch('darkMode')} 
-                        className={`h-6 w-11 ${darkMode ? 'bg-blue-600' : 'bg-white/10'} rounded-full p-1 cursor-pointer transition-colors`}
-                      >
-                        <div className={`h-4 w-4 bg-white rounded-full transform transition-transform ${darkMode ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <Separator className="bg-white/10" />
-                  
-                  <div>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h3 className="font-medium">Auto-save Drafts</h3>
-                        <p className="text-sm text-gray-400">Automatically save post drafts while writing</p>
-                      </div>
-                      <div 
-                        onClick={() => toggleSwitch('autoSaveDrafts')} 
-                        className={`h-6 w-11 ${autoSaveDrafts ? 'bg-blue-600' : 'bg-white/10'} rounded-full p-1 cursor-pointer transition-colors`}
-                      >
-                        <div className={`h-4 w-4 bg-white rounded-full transform transition-transform ${autoSaveDrafts ? 'translate-x-5' : 'translate-x-0'}`}></div>
                       </div>
                     </div>
                   </div>
