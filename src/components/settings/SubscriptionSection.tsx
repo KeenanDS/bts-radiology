@@ -7,7 +7,8 @@ import { Loader2, CreditCard, Calendar, AlertCircle, Check, Shield, Star } from 
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+
 interface Subscription {
   id: string;
   status: string;
@@ -15,6 +16,7 @@ interface Subscription {
   current_period_end: string | null;
   cancel_at_period_end: boolean;
 }
+
 interface PaymentMethod {
   id: string;
   card_brand: string | null;
@@ -23,20 +25,17 @@ interface PaymentMethod {
   card_exp_year: number | null;
   is_default: boolean;
 }
+
 const SubscriptionSection = () => {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const {
-    toast
-  } = useToast();
-  const {
-    user,
-    isOwner,
-    isGlobalAdmin
-  } = useAuth();
+  const [processingReturn, setProcessingReturn] = useState(false);
+  const { toast } = useToast();
+  const { user, isOwner, isGlobalAdmin } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
 
   // Check if user can access this component
   const canAccessBilling = isOwner || isGlobalAdmin;
@@ -45,14 +44,13 @@ const SubscriptionSection = () => {
   if (!canAccessBilling) {
     return null;
   }
+
   const STRIPE_PRICE_ID = 'price_1R8VpILNqUBmFOXgw0XXjXWh';
+
   const fetchSubscriptionData = async () => {
     setLoading(true);
     try {
-      const {
-        data,
-        error
-      } = await supabase.functions.invoke('get-subscription');
+      const { data, error } = await supabase.functions.invoke('get-subscription');
       if (error) {
         throw error;
       }
@@ -69,48 +67,71 @@ const SubscriptionSection = () => {
       setLoading(false);
     }
   };
+
   useEffect(() => {
     if (user) {
       fetchSubscriptionData();
     }
   }, [user]);
+
+  // Handle URL parameters when returning from Stripe
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const checkoutStatus = searchParams.get('checkout');
-    if (checkoutStatus === 'success') {
-      toast({
-        title: 'Success',
-        description: 'Your subscription has been activated!',
-        variant: 'default'
-      });
-      fetchSubscriptionData();
-    } else if (checkoutStatus === 'canceled') {
-      toast({
-        title: 'Checkout canceled',
-        description: 'You have canceled the subscription process',
-        variant: 'default'
-      });
+    const sessionId = searchParams.get('session_id');
+    
+    if (checkoutStatus) {
+      setProcessingReturn(true);
+      
+      // Clear URL parameters but keep the path
+      if (window.history && window.history.replaceState) {
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+      
+      if (checkoutStatus === 'success') {
+        toast({
+          title: 'Success',
+          description: 'Your subscription has been activated!',
+          variant: 'default'
+        });
+        fetchSubscriptionData().then(() => setProcessingReturn(false));
+      } else if (checkoutStatus === 'canceled') {
+        toast({
+          title: 'Checkout canceled',
+          description: 'You have canceled the subscription process',
+          variant: 'default'
+        });
+        setProcessingReturn(false);
+      }
     }
   }, [location]);
+
   const handleSubscribe = async () => {
     setCheckoutLoading(true);
     try {
-      const {
-        data,
-        error
-      } = await supabase.functions.invoke('create-checkout', {
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: {
           priceId: STRIPE_PRICE_ID,
-          successUrl: `${window.location.origin}/admin/settings?checkout=success`,
+          successUrl: `${window.location.origin}/admin/settings?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
           cancelUrl: `${window.location.origin}/admin/settings?checkout=canceled`
         }
       });
+      
       if (error) {
         throw error;
       }
+      
       if (!data.url) {
         throw new Error('No checkout URL returned');
       }
+      
+      // Store the current auth state in localStorage before redirecting
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        localStorage.setItem('stripe_checkout_redirect', 'true');
+      }
+      
       window.location.href = data.url;
     } catch (error) {
       console.error('Error creating checkout session:', error);
@@ -122,12 +143,14 @@ const SubscriptionSection = () => {
       setCheckoutLoading(false);
     }
   };
+
   const handleCancelSubscription = async () => {
     toast({
       title: 'Coming Soon',
       description: 'Subscription cancellation will be available soon'
     });
   };
+
   const renderSubscriptionStatus = () => {
     if (!subscription) {
       return <div className="space-y-6">
@@ -222,6 +245,7 @@ const SubscriptionSection = () => {
           </div>}
       </div>;
   };
+
   const renderPaymentMethods = () => {
     if (paymentMethods.length === 0) {
       return <div className="p-6 text-center">
@@ -253,16 +277,22 @@ const SubscriptionSection = () => {
           </div>)}
       </div>;
   };
+
   const renderInvoiceHistory = () => {
     return <div className="p-6 text-center">
         <p className="text-gray-400">No invoice history available</p>
       </div>;
   };
-  if (loading) {
+
+  if (loading || processingReturn) {
     return <div className="flex justify-center items-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        <p className="ml-2 text-gray-300">
+          {processingReturn ? 'Processing checkout result...' : 'Loading subscription data...'}
+        </p>
       </div>;
   }
+
   return <Card className="bg-white/5 backdrop-blur-sm border-white/10">
       <CardHeader>
         <CardTitle className="text-slate-50">Billing & Subscription</CardTitle>
@@ -288,4 +318,5 @@ const SubscriptionSection = () => {
       </CardContent>
     </Card>;
 };
+
 export default SubscriptionSection;

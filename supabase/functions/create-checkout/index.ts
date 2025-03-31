@@ -76,6 +76,10 @@ serve(async (req) => {
         console.log(`Created new Stripe customer: ${customerId}`);
       }
 
+      // Default URLs with better fallbacks
+      const defaultSuccessUrl = `${req.headers.get('Origin') || ''}/admin/settings?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
+      const defaultCancelUrl = `${req.headers.get('Origin') || ''}/admin/settings?checkout=canceled`;
+
       // Create checkout session
       const session = await stripe.checkout.sessions.create({
         customer: customerId,
@@ -87,8 +91,8 @@ serve(async (req) => {
           },
         ],
         mode: 'subscription',
-        success_url: successUrl || `${req.headers.get('Origin')}/admin/settings?checkout=success`,
-        cancel_url: cancelUrl || `${req.headers.get('Origin')}/admin/settings?checkout=canceled`,
+        success_url: successUrl || defaultSuccessUrl,
+        cancel_url: cancelUrl || defaultCancelUrl,
         metadata: {
           user_id: user.id,
         },
