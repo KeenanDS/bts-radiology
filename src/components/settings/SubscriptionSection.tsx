@@ -1,12 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, CreditCard, Calendar, AlertCircle, Check } from 'lucide-react';
+import { Loader2, CreditCard, Calendar, AlertCircle, Check, Shield, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLocation } from 'react-router-dom';
 
 interface Subscription {
   id: string;
@@ -32,6 +34,7 @@ const SubscriptionSection = () => {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
+  const location = useLocation();
 
   // This is the Stripe Price ID for your subscription plan
   const STRIPE_PRICE_ID = 'price_1R8VpILNqUBmFOXgw0XXjXWh';
@@ -65,12 +68,36 @@ const SubscriptionSection = () => {
     }
   }, [user]);
 
+  // Check for URL parameters to show success/cancel messages
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const checkoutStatus = searchParams.get('checkout');
+    
+    if (checkoutStatus === 'success') {
+      toast({
+        title: 'Success',
+        description: 'Your subscription has been activated!',
+        variant: 'default',
+      });
+      // Refresh subscription data
+      fetchSubscriptionData();
+    } else if (checkoutStatus === 'canceled') {
+      toast({
+        title: 'Checkout canceled',
+        description: 'You have canceled the subscription process',
+        variant: 'default',
+      });
+    }
+  }, [location]);
+
   const handleSubscribe = async () => {
     setCheckoutLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: {
           priceId: STRIPE_PRICE_ID,
+          successUrl: `${window.location.origin}/admin/settings?checkout=success`,
+          cancelUrl: `${window.location.origin}/admin/settings?checkout=canceled`,
         },
       });
 
@@ -106,25 +133,57 @@ const SubscriptionSection = () => {
   const renderSubscriptionStatus = () => {
     if (!subscription) {
       return (
-        <div className="p-6 text-center">
-          <p className="text-gray-400 mb-6">You don't have an active subscription</p>
-          <Button 
-            onClick={handleSubscribe} 
-            disabled={checkoutLoading}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-          >
-            {checkoutLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing
-              </>
-            ) : (
-              <>
-                <CreditCard className="mr-2 h-4 w-4" />
-                Subscribe Now
-              </>
-            )}
-          </Button>
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-lg p-6 border border-blue-500/20">
+            <div className="flex items-start space-x-4">
+              <div className="bg-blue-500/20 p-3 rounded-full">
+                <Star className="h-6 w-6 text-blue-400" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-lg font-medium text-white">Premium Plan</h3>
+                <ul className="space-y-1">
+                  <li className="flex items-center text-gray-300">
+                    <Check className="h-4 w-4 text-blue-400 mr-2" /> 
+                    Full content generation
+                  </li>
+                  <li className="flex items-center text-gray-300">
+                    <Check className="h-4 w-4 text-blue-400 mr-2" /> 
+                    Unlimited posts
+                  </li>
+                  <li className="flex items-center text-gray-300">
+                    <Check className="h-4 w-4 text-blue-400 mr-2" /> 
+                    AI fact checking
+                  </li>
+                  <li className="flex items-center text-gray-300">
+                    <Check className="h-4 w-4 text-blue-400 mr-2" /> 
+                    Priority support
+                  </li>
+                </ul>
+                <div className="pt-2">
+                  <Button 
+                    onClick={handleSubscribe} 
+                    disabled={checkoutLoading}
+                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 w-full"
+                  >
+                    {checkoutLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        Subscribe Now
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  Secure payment processing through Stripe. Cancel anytime.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       );
     }
@@ -169,7 +228,7 @@ const SubscriptionSection = () => {
           <div className="p-4 bg-white/5 rounded-md">
             <h4 className="font-medium">Plan</h4>
             <p className="text-gray-300 capitalize mt-1">
-              {subscription.plan_id.replace(/-/g, ' ')}
+              Premium
             </p>
           </div>
         )}
