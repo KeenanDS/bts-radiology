@@ -22,9 +22,13 @@ const NotFound = () => {
 
     // Check if we're returning from Stripe checkout
     const checkoutStatus = new URLSearchParams(location.search).get('checkout');
+    const stripePageDetected = 
+      location.pathname.includes('checkout') || 
+      location.pathname.includes('stripe') ||
+      checkoutStatus;
     
-    if (checkoutStatus) {
-      console.log("Detected checkout return params:", checkoutStatus);
+    if (stripePageDetected) {
+      console.log("Detected potential return from Stripe:", location.pathname, location.search);
       
       // Attempt to recover the session and redirect
       setIsRecovering(true);

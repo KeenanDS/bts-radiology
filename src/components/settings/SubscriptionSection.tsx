@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -32,6 +33,7 @@ const SubscriptionSection = () => {
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [processingReturn, setProcessingReturn] = useState(false);
+  const [pollingActive, setPollingActive] = useState(false);
   const { toast } = useToast();
   const { user, isOwner, isGlobalAdmin } = useAuth();
   const location = useLocation();
@@ -73,6 +75,31 @@ const SubscriptionSection = () => {
       fetchSubscriptionData();
     }
   }, [user]);
+
+  // Set up polling for subscription status when needed
+  useEffect(() => {
+    let pollInterval: number | null = null;
+    
+    if (pollingActive && user) {
+      // Poll every 5 seconds
+      pollInterval = window.setInterval(() => {
+        console.log('Polling for subscription updates...');
+        fetchSubscriptionData().then(() => {
+          // If subscription is found, stop polling
+          if (subscription && subscription.status === 'active') {
+            console.log('Active subscription found, stopping polling');
+            setPollingActive(false);
+          }
+        });
+      }, 5000);
+    }
+    
+    return () => {
+      if (pollInterval) {
+        window.clearInterval(pollInterval);
+      }
+    };
+  }, [pollingActive, user, subscription]);
 
   // Handle URL parameters when returning from Stripe
   useEffect(() => {
@@ -126,13 +153,26 @@ const SubscriptionSection = () => {
         throw new Error('No checkout URL returned');
       }
       
-      // Store the current auth state in localStorage before redirecting
+      // Store auth state before redirecting
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         localStorage.setItem('stripe_checkout_redirect', 'true');
       }
       
-      window.location.href = data.url;
+      // Open checkout in a new tab
+      window.open(data.url, '_blank');
+      
+      // Start polling for subscription updates
+      setPollingActive(true);
+      
+      // Reset loading state
+      setCheckoutLoading(false);
+      
+      toast({
+        title: 'Checkout opened in new tab',
+        description: 'Complete your subscription in the new tab. This page will update automatically.',
+        variant: 'default'
+      });
     } catch (error) {
       console.error('Error creating checkout session:', error);
       toast({
@@ -184,10 +224,13 @@ const SubscriptionSection = () => {
                   </li>
                 </ul>
                 <div className="pt-2">
-                  <Button onClick={handleSubscribe} disabled={checkoutLoading} className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 w-full">
+                  <Button onClick={handleSubscribe} disabled={checkoutLoading || pollingActive} className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 w-full">
                     {checkoutLoading ? <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Processing
+                      </> : pollingActive ? <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Waiting for checkout...
                       </> : <>
                         <CreditCard className="mr-2 h-4 w-4" />
                         Subscribe Now
