@@ -17,7 +17,10 @@ const SettingsPage = () => {
   const [darkMode, setDarkMode] = useState(true);
   const [autoSaveDrafts, setAutoSaveDrafts] = useState(false);
   const { toast } = useToast();
-  const { user, isOwner } = useAuth();
+  const { user, isOwner, isGlobalAdmin } = useAuth();
+
+  // Check if user is owner or global admin
+  const canAccessBilling = isOwner || isGlobalAdmin;
 
   const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,7 +94,7 @@ const SettingsPage = () => {
           <Tabs defaultValue="account" className="w-full">
             <TabsList className="w-full mb-8 bg-white/5">
               <TabsTrigger value="account" className="flex-1">Account</TabsTrigger>
-              {isOwner && <TabsTrigger value="billing" className="flex-1">Billing</TabsTrigger>}
+              {canAccessBilling && <TabsTrigger value="billing" className="flex-1">Billing</TabsTrigger>}
               <TabsTrigger value="preferences" className="flex-1">Preferences</TabsTrigger>
             </TabsList>
             
@@ -168,7 +171,7 @@ const SettingsPage = () => {
               </div>
             </TabsContent>
             
-            {isOwner && (
+            {canAccessBilling && (
               <TabsContent value="billing">
                 <SubscriptionSection />
               </TabsContent>

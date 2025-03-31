@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -32,8 +33,16 @@ const SubscriptionSection = () => {
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isOwner, isGlobalAdmin } = useAuth();
   const location = useLocation();
+
+  // Check if user can access this component
+  const canAccessBilling = isOwner || isGlobalAdmin;
+
+  // Redirect or show unauthorized message if not allowed
+  if (!canAccessBilling) {
+    return null;
+  }
 
   const STRIPE_PRICE_ID = 'price_1R8VpILNqUBmFOXgw0XXjXWh';
 
