@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -32,6 +33,7 @@ const SubscriptionSection = () => {
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [processingReturn, setProcessingReturn] = useState(false);
+  const [pollingForUpdates, setPollingForUpdates] = useState(false);
   const { toast } = useToast();
   const { user, isOwner, isGlobalAdmin } = useAuth();
   const location = useLocation();
@@ -74,6 +76,36 @@ const SubscriptionSection = () => {
     }
   }, [user]);
 
+  // Set up polling when checkout is initiated
+  useEffect(() => {
+    let intervalId: number | undefined;
+    
+    if (pollingForUpdates) {
+      // Poll every 5 seconds to check for subscription changes
+      intervalId = window.setInterval(() => {
+        console.log('Polling for subscription updates...');
+        fetchSubscriptionData().then((updatedData) => {
+          // If we detect an active subscription now, stop polling
+          if (subscription?.status === 'active') {
+            console.log('Subscription is now active, stopping polling');
+            setPollingForUpdates(false);
+            toast({
+              title: 'Subscription Active',
+              description: 'Your subscription has been activated successfully!',
+              variant: 'default'
+            });
+          }
+        });
+      }, 5000);
+    }
+
+    return () => {
+      if (intervalId) {
+        window.clearInterval(intervalId);
+      }
+    };
+  }, [pollingForUpdates, subscription?.status]);
+
   // Handle URL parameters when returning from Stripe
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -110,6 +142,7 @@ const SubscriptionSection = () => {
   const handleSubscribe = async () => {
     setCheckoutLoading(true);
     try {
+      // We still generate the same URLs, but we'll open in a new tab
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: {
           priceId: STRIPE_PRICE_ID,
@@ -126,13 +159,27 @@ const SubscriptionSection = () => {
         throw new Error('No checkout URL returned');
       }
       
-      // Store the current auth state in localStorage before redirecting
+      // Store the current auth state in localStorage before opening the new tab
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         localStorage.setItem('stripe_checkout_redirect', 'true');
       }
       
-      window.location.href = data.url;
+      // Open checkout URL in a new tab instead of redirecting the current page
+      window.open(data.url, '_blank');
+      
+      // Start polling for subscription updates
+      setPollingForUpdates(true);
+      
+      // Reset the loading state since we're staying on this page
+      setCheckoutLoading(false);
+      
+      toast({
+        title: 'Checkout Opened',
+        description: 'Complete your subscription in the new tab. This page will update automatically when complete.',
+        duration: 6000,
+      });
+      
     } catch (error) {
       console.error('Error creating checkout session:', error);
       toast({
@@ -184,10 +231,13 @@ const SubscriptionSection = () => {
                   </li>
                 </ul>
                 <div className="pt-2">
-                  <Button onClick={handleSubscribe} disabled={checkoutLoading} className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 w-full">
+                  <Button onClick={handleSubscribe} disabled={checkoutLoading || pollingForUpdates} className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 w-full">
                     {checkoutLoading ? <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Processing
+                      </> : pollingForUpdates ? <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Waiting for checkout
                       </> : <>
                         <CreditCard className="mr-2 h-4 w-4" />
                         Subscribe Now
