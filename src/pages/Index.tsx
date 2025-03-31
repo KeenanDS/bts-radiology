@@ -61,9 +61,7 @@ const Index = () => {
             </Link>
           ) : (
             <div className="space-x-4">
-              <Link to="/admin-login" className="text-sm px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors">
-                Admin Access
-              </Link>
+              {/* Admin login button removed from here, but route still exists */}
             </div>
           )}
         </div>
