@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -35,8 +34,7 @@ const SubscriptionSection = () => {
   const { user } = useAuth();
 
   // This is the Stripe Price ID for your subscription plan
-  // Replace with your actual Stripe Price ID
-  const STRIPE_PRICE_ID = 'price_1OqAT32aJLe3tGpTpLw2v2fA'; // Example ID, replace with your actual price ID
+  const STRIPE_PRICE_ID = 'price_1R8VpILNqUBmFOXgw0XXjXWh';
 
   const fetchSubscriptionData = async () => {
     setLoading(true);

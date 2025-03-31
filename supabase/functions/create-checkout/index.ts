@@ -51,14 +51,7 @@ serve(async (req) => {
       }
 
       // Parse request body
-      const { priceId, successUrl, cancelUrl } = await req.json();
-
-      if (!priceId) {
-        return new Response(JSON.stringify({ error: 'Price ID is required' }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 400,
-        });
-      }
+      const { priceId = 'price_1R8VpILNqUBmFOXgw0XXjXWh', successUrl, cancelUrl } = await req.json();
 
       console.log(`Creating checkout session for user ${user.id} with price ${priceId}`);
 
