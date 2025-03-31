@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -36,7 +35,6 @@ const SubscriptionSection = () => {
   const { user } = useAuth();
   const location = useLocation();
 
-  // This is the Stripe Price ID for your subscription plan
   const STRIPE_PRICE_ID = 'price_1R8VpILNqUBmFOXgw0XXjXWh';
 
   const fetchSubscriptionData = async () => {
@@ -68,7 +66,6 @@ const SubscriptionSection = () => {
     }
   }, [user]);
 
-  // Check for URL parameters to show success/cancel messages
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const checkoutStatus = searchParams.get('checkout');
@@ -79,7 +76,6 @@ const SubscriptionSection = () => {
         description: 'Your subscription has been activated!',
         variant: 'default',
       });
-      // Refresh subscription data
       fetchSubscriptionData();
     } else if (checkoutStatus === 'canceled') {
       toast({
@@ -109,7 +105,6 @@ const SubscriptionSection = () => {
         throw new Error('No checkout URL returned');
       }
 
-      // Redirect to Stripe checkout page
       window.location.href = data.url;
     } catch (error) {
       console.error('Error creating checkout session:', error);
@@ -123,7 +118,6 @@ const SubscriptionSection = () => {
   };
 
   const handleCancelSubscription = async () => {
-    // Implement when needed
     toast({
       title: 'Coming Soon',
       description: 'Subscription cancellation will be available soon',
@@ -144,19 +138,23 @@ const SubscriptionSection = () => {
                 <ul className="space-y-1">
                   <li className="flex items-center text-gray-300">
                     <Check className="h-4 w-4 text-blue-400 mr-2" /> 
-                    Full content generation
+                    Content generation
                   </li>
                   <li className="flex items-center text-gray-300">
                     <Check className="h-4 w-4 text-blue-400 mr-2" /> 
-                    Unlimited posts
+                    Fact checking
                   </li>
                   <li className="flex items-center text-gray-300">
                     <Check className="h-4 w-4 text-blue-400 mr-2" /> 
-                    AI fact checking
+                    Podcast generation
                   </li>
                   <li className="flex items-center text-gray-300">
                     <Check className="h-4 w-4 text-blue-400 mr-2" /> 
-                    Priority support
+                    Domain ownership
+                  </li>
+                  <li className="flex items-center text-gray-300">
+                    <Shield className="h-4 w-4 text-blue-400 mr-2" /> 
+                    SSL security
                   </li>
                 </ul>
                 <div className="pt-2">
