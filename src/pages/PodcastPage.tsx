@@ -17,7 +17,8 @@ import {
   History,
   AlertCircle,
   RefreshCw,
-  Clock
+  Clock,
+  Upload
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +26,8 @@ import Sidebar from "@/components/admin/Sidebar";
 import { supabase } from "@/integrations/supabase/client";
 import AudioPlayer from "@/components/AudioPlayer";
 import PodcastHistory from "@/components/podcast/PodcastHistory";
+import UploadPodcastDialog from "@/components/podcast/UploadPodcastDialog";
+import { Layout } from "@/components/admin/Layout";
 
 interface PodcastGenerationResult {
   success: boolean;
@@ -71,6 +74,7 @@ const PodcastPage = () => {
   const [retryCount, setRetryCount] = useState(0);
   const [expandedTimeWindow, setExpandedTimeWindow] = useState(false);
   const [backgroundMusicUrl, setBackgroundMusicUrl] = useState<string | null>(null);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const handleGeneratePodcast = async () => {
@@ -341,9 +345,7 @@ const PodcastPage = () => {
   }, [currentEpisodeId]);
 
   return (
-    <div className="min-h-screen flex bg-[#0a0b17]">
-      <Sidebar />
-      
+    <Layout>
       <div className="flex-1 p-6 bg-gradient-to-br from-[#0a0b17] via-[#111936] to-[#0a0b17] overflow-auto">
         <div className="max-w-5xl mx-auto space-y-8">
           <div>
@@ -385,12 +387,22 @@ const PodcastPage = () => {
               )}
 
               <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
-                <CardHeader>
-                  <CardTitle className="text-white text-2xl">Generate a New Podcast Episode</CardTitle>
-                  <CardDescription className="text-gray-400">
-                    Set a date for your podcast and our AI will collect recent radiology news stories 
-                    and generate a podcast script
-                  </CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-white text-2xl">Generate a New Podcast Episode</CardTitle>
+                    <CardDescription className="text-gray-400">
+                      Set a date for your podcast and our AI will collect recent radiology news stories 
+                      and generate a podcast script
+                    </CardDescription>
+                  </div>
+                  <Button
+                    onClick={() => setUploadDialogOpen(true)}
+                    variant="outline"
+                    className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Audio
+                  </Button>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="space-y-2">
@@ -673,7 +685,21 @@ const PodcastPage = () => {
           </Tabs>
         </div>
       </div>
-    </div>
+      
+      <UploadPodcastDialog 
+        open={uploadDialogOpen} 
+        onOpenChange={setUploadDialogOpen} 
+        onSuccess={() => {
+          const historyTab = document.querySelector('[data-state="active"][value="history"]');
+          if (!historyTab) {
+            const historyTrigger = document.querySelector('[value="history"]');
+            if (historyTrigger) {
+              (historyTrigger as HTMLElement).click();
+            }
+          }
+        }} 
+      />
+    </Layout>
   );
 };
 

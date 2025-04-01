@@ -28,8 +28,35 @@ const PodcastHistory = () => {
   const { toast } = useToast();
 
   useEffect(() => {
+    // Ensure the podcast_audio bucket exists when the component mounts
+    checkAndCreateBucket();
     fetchPodcastEpisodes();
   }, []);
+
+  const checkAndCreateBucket = async () => {
+    try {
+      const { data: bucket, error } = await supabase
+        .storage
+        .getBucket('podcast_audio');
+      
+      if (error || !bucket) {
+        console.log("Creating podcast_audio bucket...");
+        const { error: createError } = await supabase
+          .storage
+          .createBucket('podcast_audio', {
+            public: true,
+            allowedMimeTypes: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/x-m4a'],
+            fileSizeLimit: 52428800, // 50MB
+          });
+        
+        if (createError) {
+          console.error("Error creating bucket:", createError);
+        }
+      }
+    } catch (error) {
+      console.error("Error checking bucket:", error);
+    }
+  };
 
   const fetchPodcastEpisodes = async () => {
     try {
@@ -90,7 +117,7 @@ const PodcastHistory = () => {
         </CardHeader>
         <CardContent>
           <div className="text-center py-10 text-gray-400">
-            <p>No podcast episodes found. Generate your first podcast to see it here.</p>
+            <p>No podcast episodes found. Generate your first podcast or upload an audio file to see it here.</p>
           </div>
         </CardContent>
       </Card>
@@ -102,7 +129,7 @@ const PodcastHistory = () => {
       <CardHeader>
         <CardTitle className="text-white text-xl">Podcast History</CardTitle>
         <CardDescription className="text-gray-400">
-          Your generated podcast episodes
+          Your podcast episodes
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
