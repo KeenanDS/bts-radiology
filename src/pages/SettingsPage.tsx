@@ -1,252 +1,282 @@
-import React, { useState, useEffect } from 'react';
-import Sidebar from '@/components/admin/Sidebar';
-import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import SubscriptionSection from '@/components/settings/SubscriptionSection';
-import UserManagementSection from '@/components/settings/UserManagementSection';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Layout } from "@/components/admin/Layout";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import SubscriptionSection from "@/components/settings/SubscriptionSection";
+import UserManagementSection from "@/components/settings/UserManagementSection";
+import { useAuth } from "@/contexts/AuthContext";
+import { Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const SettingsPage = () => {
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
-  const { toast } = useToast();
-  const { user, isOwner, isGlobalAdmin } = useAuth();
-  const location = useLocation();
   const navigate = useNavigate();
-
-  const canAccessBilling = isOwner || isGlobalAdmin;
-
-  const handlePasswordUpdate = async (e: React.FormEvent) => {
+  const { toast } = useToast();
+  const { user, userRole, refreshSession } = useAuth();
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentEmail, setCurrentEmail] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  
+  useEffect(() => {
+    if (user?.email) {
+      setCurrentEmail(user.email);
+      setNewEmail(user.email);
+    }
+  }, [user]);
+  
+  const handleUpdateEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (newPassword !== confirmNewPassword) {
+    if (!newEmail || newEmail === currentEmail) {
       toast({
-        title: "Error",
-        description: "New passwords do not match",
+        title: "No changes",
+        description: "Please enter a new email address.",
+        variant: "default",
+      });
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      
+      const { error } = await supabase.auth.updateUser({
+        email: newEmail,
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Email update initiated",
+        description: "Please check your new email address for a confirmation link.",
+        variant: "default",
+      });
+      
+      // Update the current email to show the pending state
+      setCurrentEmail(newEmail);
+      
+    } catch (error: any) {
+      console.error("Error updating email:", error);
+      toast({
+        title: "Update failed",
+        description: error.message || "Failed to update email. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast({
+        title: "Missing information",
+        description: "Please fill in all password fields.",
         variant: "destructive",
       });
       return;
     }
     
-    setIsSubmitting(true);
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Passwords don't match",
+        description: "Your new password and confirmation password do not match.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
-      const { error } = await supabase.auth.updateUser({
+      setIsLoading(true);
+      
+      const { error } = await supabase.auth.updateUser({ 
         password: newPassword
       });
       
       if (error) throw error;
       
       toast({
-        title: "Success",
-        description: "Password has been updated",
+        title: "Password updated",
+        description: "Your password has been successfully updated.",
+        variant: "default",
       });
       
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmNewPassword('');
-    } catch (error) {
-      console.error('Error updating password:', error);
+      // Clear password fields after successful update
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      
+      // Refresh the session to ensure auth state is current
+      await refreshSession();
+      
+    } catch (error: any) {
+      console.error("Error updating password:", error);
       toast({
-        title: "Error",
-        description: "Failed to update password",
+        title: "Update failed",
+        description: error.message || "Failed to update password. Please try again.",
         variant: "destructive",
       });
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
-
-  const toggleSwitch = (setting: string) => {
-    switch (setting) {
-      case 'emailNotifications':
-        setEmailNotifications(!emailNotifications);
-        break;
-      default:
-        break;
-    }
-    
-    toast({
-      title: "Setting updated",
-      description: "Your preference has been saved",
-    });
-  };
-
-  useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const checkoutStatus = searchParams.get('checkout');
-    
-    if (checkoutStatus) {
-      console.log('Processing checkout return with status:', checkoutStatus);
-      setIsProcessingCheckout(true);
-      
-      if (window.history && window.history.replaceState) {
-        const cleanUrl = window.location.pathname;
-        window.history.replaceState({}, document.title, cleanUrl);
-      }
-      
-      if (checkoutStatus === 'success') {
-        toast({
-          title: 'Success',
-          description: 'Your subscription has been activated!',
-        });
-      } else if (checkoutStatus === 'canceled') {
-        toast({
-          title: 'Checkout canceled',
-          description: 'You have canceled the subscription process',
-        });
-      }
-      
-      setTimeout(() => setIsProcessingCheckout(false), 500);
-    }
-  }, [location.search, toast]);
-
-  if (isProcessingCheckout) {
-    return (
-      <div className="flex h-screen bg-gray-900 text-white">
-        <Sidebar />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
-            <p className="text-xl">Processing checkout result...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  
   return (
-    <div className="flex h-screen bg-gray-900 text-white">
-      <Sidebar />
-      <div className="flex-1 p-8 overflow-auto">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-3xl font-bold mb-6">Settings</h1>
+    <Layout>
+      <div className="container mx-auto py-6 space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Settings</h1>
+          <p className="text-gray-400 mt-2">
+            Manage your account settings and preferences
+          </p>
+        </div>
+        
+        <Tabs defaultValue="account" className="w-full">
+          <TabsList className="bg-gray-800 text-gray-300 border border-gray-700">
+            <TabsTrigger value="account" className="data-[state=active]:bg-gray-700">
+              Account
+            </TabsTrigger>
+            <TabsTrigger value="subscription" className="data-[state=active]:bg-gray-700">
+              Subscription
+            </TabsTrigger>
+            {userRole === 'global_administrator' && (
+              <TabsTrigger value="users" className="data-[state=active]:bg-gray-700">
+                User Management
+              </TabsTrigger>
+            )}
+          </TabsList>
           
-          <Tabs defaultValue="account" className="w-full">
-            <TabsList className="w-full mb-8 bg-white/5">
-              <TabsTrigger value="account" className="flex-1">Account</TabsTrigger>
-              {canAccessBilling && <TabsTrigger value="billing" className="flex-1">Billing</TabsTrigger>}
-              <TabsTrigger value="preferences" className="flex-1">Preferences</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="account">
-              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-6 mb-8">
-                <h2 className="text-xl font-semibold mb-4">Account Information</h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">Email Address</label>
-                    <input
-                      type="email"
-                      className="w-full bg-white/5 border border-white/10 rounded-md px-4 py-2"
-                      value={user?.email || ''}
+          <TabsContent value="account" className="space-y-6 mt-6">
+            <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-white">Email Settings</CardTitle>
+                <CardDescription className="text-gray-400">
+                  Update your email address
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleUpdateEmail} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-white">Current Email</Label>
+                    <Input
+                      id="email"
+                      value={currentEmail}
                       disabled
+                      className="bg-gray-700 text-white border-gray-600"
                     />
                   </div>
-                </div>
-              </div>
-              
-              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-6 mb-8">
-                <h2 className="text-xl font-semibold mb-4">Security</h2>
-                <form onSubmit={handlePasswordUpdate} className="space-y-4">
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">Current Password</label>
-                    <input
-                      type="password"
-                      className="w-full bg-white/5 border border-white/10 rounded-md px-4 py-2"
-                      placeholder="••••••••"
+                  <div className="space-y-2">
+                    <Label htmlFor="newEmail" className="text-white">New Email</Label>
+                    <Input
+                      id="newEmail"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      type="email"
+                      placeholder="Enter new email address"
+                      className="bg-gray-700 text-white border-gray-600"
+                      required
+                    />
+                  </div>
+                  <Button 
+                    type="submit" 
+                    disabled={isLoading || !newEmail || newEmail === currentEmail}
+                    className="mt-4"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Updating...
+                      </>
+                    ) : "Update Email"}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-white">Password Settings</CardTitle>
+                <CardDescription className="text-gray-400">
+                  Change your password
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleUpdatePassword} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="currentPassword" className="text-white">Current Password</Label>
+                    <Input
+                      id="currentPassword"
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
+                      type="password"
+                      placeholder="Enter your current password"
+                      className="bg-gray-700 text-white border-gray-600"
+                      required
                     />
                   </div>
-                  
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">New Password</label>
-                    <input
-                      type="password"
-                      className="w-full bg-white/5 border border-white/10 rounded-md px-4 py-2"
-                      placeholder="••••••••"
+                  <div className="space-y-2">
+                    <Label htmlFor="newPassword" className="text-white">New Password</Label>
+                    <Input
+                      id="newPassword"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">Confirm New Password</label>
-                    <input
                       type="password"
-                      className="w-full bg-white/5 border border-white/10 rounded-md px-4 py-2"
-                      placeholder="••••••••"
-                      value={confirmNewPassword}
-                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      placeholder="Enter new password"
+                      className="bg-gray-700 text-white border-gray-600"
+                      required
                     />
                   </div>
-                  
-                  <div className="pt-2">
-                    <button 
-                      type="submit"
-                      disabled={isSubmitting || !currentPassword || !newPassword || !confirmNewPassword}
-                      className="px-6 py-2 bg-blue-600 rounded-md hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isSubmitting ? 'Updating...' : 'Update Password'}
-                    </button>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword" className="text-white">Confirm New Password</Label>
+                    <Input
+                      id="confirmPassword"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      type="password"
+                      placeholder="Confirm new password"
+                      className="bg-gray-700 text-white border-gray-600"
+                      required
+                    />
                   </div>
+                  <Button 
+                    type="submit" 
+                    disabled={isLoading || !currentPassword || !newPassword || !confirmPassword}
+                    className="mt-4"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Updating...
+                      </>
+                    ) : "Update Password"}
+                  </Button>
                 </form>
-              </div>
-              
-              {isGlobalAdmin && (
-                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-6 mb-8">
-                  <UserManagementSection />
-                </div>
-              )}
-              
-              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-6">
-                <h2 className="text-xl font-semibold text-red-400 mb-4">Danger Zone</h2>
-                <p className="text-gray-400 mb-4">Permanently delete your account and all of your content.</p>
-                <button className="px-6 py-2 bg-red-600/30 text-red-300 border border-red-600/50 rounded-md hover:bg-red-600/40 transition">
-                  Delete Account
-                </button>
-              </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="subscription">
+            <SubscriptionSection />
+          </TabsContent>
+          
+          {userRole === 'global_administrator' && (
+            <TabsContent value="users">
+              <UserManagementSection />
             </TabsContent>
-            
-            {canAccessBilling && (
-              <TabsContent value="billing">
-                <SubscriptionSection />
-              </TabsContent>
-            )}
-            
-            <TabsContent value="preferences">
-              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-6 mb-8">
-                <h2 className="text-xl font-semibold mb-4">Account Preferences</h2>
-                <div className="space-y-6">
-                  <div>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h3 className="font-medium">Email Notifications</h3>
-                        <p className="text-sm text-gray-400">Receive email notifications for important updates</p>
-                      </div>
-                      <div 
-                        onClick={() => toggleSwitch('emailNotifications')} 
-                        className={`h-6 w-11 ${emailNotifications ? 'bg-blue-600' : 'bg-white/10'} rounded-full p-1 cursor-pointer transition-colors`}
-                      >
-                        <div className={`h-4 w-4 bg-white rounded-full transform transition-transform ${emailNotifications ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </div>
+          )}
+        </Tabs>
       </div>
-    </div>
+    </Layout>
   );
 };
 
