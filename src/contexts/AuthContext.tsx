@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
@@ -14,7 +13,7 @@ interface AuthContextProps {
   session: Session | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, metadata?: { full_name?: string }) => Promise<void>; // Added signUp method
+  signUp: (email: string, password: string, full_name?: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
   isOwner: boolean;
@@ -43,7 +42,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -55,7 +53,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: Session | null) => {
         console.log("Auth state changed:", event);
@@ -69,7 +66,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           setIsLoading(false);
         }
         
-        // Handle sign-outs
         if (event === "SIGNED_OUT") {
           console.log("User signed out, redirecting to login");
           navigate("/admin-login");
@@ -77,7 +73,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     );
 
-    // Cleanup subscription on unmount
     return () => {
       subscription.unsubscribe();
     };
@@ -114,7 +109,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (error) throw error;
       
-      // Fetch the user role after successful sign-in
       if (data.user) {
         fetchUserRole(data.user.id);
       }
@@ -137,7 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
   
-  const signUp = async (email: string, password: string, metadata?: { full_name?: string }) => {
+  const signUp = async (email: string, password: string, full_name?: string) => {
     try {
       setIsLoading(true);
       
@@ -146,7 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         password,
         options: {
           data: {
-            full_name: metadata?.full_name || '',
+            full_name: full_name || '',
           },
         },
       });
@@ -209,7 +203,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  // Calculate role-based boolean flags
   const isGlobalAdmin = userRole === 'global_administrator';
   const isOwner = userRole === 'owner';
   const isAdministrator = userRole === 'administrator';
