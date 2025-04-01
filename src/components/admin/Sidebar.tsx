@@ -1,6 +1,6 @@
 
 import { Button } from "@/components/ui/button";
-import { FileText, User, Settings, LogOut, BookText, Calendar, Mic, ChevronUp } from "lucide-react";
+import { FileText, User, Settings, LogOut, BookText, Calendar, Mic, ChevronUp, Home } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useState } from "react";
@@ -67,6 +67,19 @@ const Sidebar = () => {
           >
             <Mic className="mr-2 h-5 w-5" />
             Podcast
+          </Button>
+        </Link>
+      </div>
+      
+      {/* View Landing Link - positioned at the bottom, above the profile section */}
+      <div className="mt-auto mb-2 px-4">
+        <Link to="/" target="_blank" rel="noopener noreferrer">
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/10"
+          >
+            <Home className="mr-2 h-5 w-5" />
+            View Landing
           </Button>
         </Link>
       </div>
