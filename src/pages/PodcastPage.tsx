@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { 
   CalendarIcon, 
@@ -18,7 +20,10 @@ import {
   AlertCircle,
   RefreshCw,
   Clock,
-  Upload
+  Upload,
+  Edit2,
+  Save,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -75,6 +80,9 @@ const PodcastPage = () => {
   const [expandedTimeWindow, setExpandedTimeWindow] = useState(false);
   const [backgroundMusicUrl, setBackgroundMusicUrl] = useState<string | null>(null);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [isEditingScript, setIsEditingScript] = useState(false);
+  const [editedScript, setEditedScript] = useState<string | null>(null);
+  const [isSavingScript, setIsSavingScript] = useState(false);
   const { toast } = useToast();
 
   const handleGeneratePodcast = async () => {
@@ -244,6 +252,8 @@ const PodcastPage = () => {
       
       if (data) {
         setFullScript(data.podcast_script);
+        setEditedScript(null); // Reset edited script when fetching new script
+        setIsEditingScript(false); // Exit edit mode when fetching new script
         
         if (data.processed_audio_url) {
           setAudioUrl(data.processed_audio_url);
@@ -271,6 +281,51 @@ const PodcastPage = () => {
       });
     } finally {
       setIsFetchingFullScript(false);
+    }
+  };
+
+  const handleEditScript = () => {
+    setEditedScript(fullScript);
+    setIsEditingScript(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditedScript(null);
+    setIsEditingScript(false);
+  };
+
+  const handleSaveScript = async () => {
+    if (!currentEpisodeId || !editedScript) return;
+    
+    setIsSavingScript(true);
+    
+    try {
+      const { error } = await supabase
+        .from("podcast_episodes")
+        .update({ podcast_script: editedScript })
+        .eq("id", currentEpisodeId);
+      
+      if (error) {
+        console.error("Error saving script:", error);
+        throw error;
+      }
+      
+      setFullScript(editedScript);
+      setIsEditingScript(false);
+      
+      toast({
+        title: "Success",
+        description: "Podcast script updated successfully",
+      });
+    } catch (error) {
+      console.error("Error saving script:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save the podcast script",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingScript(false);
     }
   };
 
@@ -604,10 +659,53 @@ const PodcastPage = () => {
                                   )}
                                 </Button>
                               )}
+                              
+                              {fullScript && !isEditingScript && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={handleEditScript}
+                                  className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
+                                >
+                                  <Edit2 className="mr-2 h-4 w-4" />
+                                  Edit Script
+                                </Button>
+                              )}
                             </div>
                           </div>
                           <div className="p-4 bg-[#1a1f3d] rounded-lg max-h-[600px] overflow-y-auto">
-                            {fullScript ? (
+                            {isEditingScript ? (
+                              <div className="space-y-4">
+                                <Textarea
+                                  value={editedScript || ""}
+                                  onChange={(e) => setEditedScript(e.target.value)}
+                                  className="min-h-[400px] w-full bg-[#111936] border-[#2a2f4d] text-white"
+                                  placeholder="Edit your podcast script here..."
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <Button 
+                                    variant="outline" 
+                                    onClick={handleCancelEdit}
+                                    className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
+                                  >
+                                    <X className="mr-2 h-4 w-4" />
+                                    Cancel
+                                  </Button>
+                                  <Button 
+                                    onClick={handleSaveScript}
+                                    disabled={isSavingScript}
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                  >
+                                    {isSavingScript ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Save className="mr-2 h-4 w-4" />
+                                    )}
+                                    Save Changes
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : fullScript ? (
                               <p className="text-gray-300 whitespace-pre-line">{fullScript}</p>
                             ) : (
                               <>
