@@ -8,17 +8,25 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { User, Upload, Loader } from 'lucide-react';
 
+// Define type for profile data
+interface ProfileData {
+  full_name: string;
+  email: string;
+  bio: string | null;
+  avatar_url: string | null;
+}
+
 const ProfilePage = () => {
   const { user, refreshSession } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   
-  const [profileData, setProfileData] = useState({
+  const [profileData, setProfileData] = useState<ProfileData>({
     full_name: '',
     email: '',
     bio: '',
-    avatar_url: null as string | null
+    avatar_url: null
   });
 
   useEffect(() => {
@@ -37,14 +45,25 @@ const ProfilePage = () => {
         .eq('id', user?.id)
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching profile:', error);
+        toast({
+          title: 'Error fetching profile',
+          description: error.message,
+          variant: 'destructive'
+        });
+        return;
+      }
       
-      setProfileData({
-        full_name: data.full_name || '',
-        email: data.email || '',
-        bio: data.bio || '',
-        avatar_url: data.avatar_url
-      });
+      // Only set profile data if we have valid data
+      if (data) {
+        setProfileData({
+          full_name: data.full_name || '',
+          email: data.email || '',
+          bio: data.bio || '',
+          avatar_url: data.avatar_url
+        });
+      }
     } catch (error) {
       console.error('Error fetching profile:', error);
       toast({
@@ -69,6 +88,7 @@ const ProfilePage = () => {
     try {
       setLoading(true);
       
+      // Only update the fields that we're allowing the user to change
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -286,7 +306,7 @@ const ProfilePage = () => {
                     <textarea
                       name="bio"
                       className="w-full bg-white/5 border border-white/10 rounded-md px-4 py-2 h-32"
-                      value={profileData.bio}
+                      value={profileData.bio || ''}
                       onChange={handleChange}
                     />
                   </div>
