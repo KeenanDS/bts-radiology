@@ -14,8 +14,12 @@ interface AuthContextProps {
   session: Session | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, metadata?: { full_name?: string }) => Promise<void>; // Added signUp method
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  isOwner: boolean;
+  isGlobalAdmin: boolean;
+  isAdministrator: boolean;
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
@@ -132,6 +136,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsLoading(false);
     }
   };
+  
+  const signUp = async (email: string, password: string, metadata?: { full_name?: string }) => {
+    try {
+      setIsLoading(true);
+      
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: metadata?.full_name || '',
+          },
+        },
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Registration successful",
+        description: "Please check your email for a confirmation link.",
+      });
+      
+      return;
+    } catch (error: any) {
+      console.error("Error signing up:", error);
+      toast({
+        title: "Registration failed",
+        description: error.message || "An error occurred during registration",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const signOut = async () => {
     try {
@@ -170,14 +209,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  // Calculate role-based boolean flags
+  const isGlobalAdmin = userRole === 'global_administrator';
+  const isOwner = userRole === 'owner';
+  const isAdministrator = userRole === 'administrator';
+
   const value = {
     user,
     userRole,
     session,
     isLoading,
     signIn,
+    signUp,
     signOut,
     refreshSession,
+    isGlobalAdmin,
+    isOwner,
+    isAdministrator,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
