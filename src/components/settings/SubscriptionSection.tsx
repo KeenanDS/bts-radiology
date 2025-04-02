@@ -46,7 +46,7 @@ const SubscriptionSection = () => {
     return null;
   }
 
-  const STRIPE_PRICE_ID = 'price_1R8VpILNqUBmFOXgw0XXjXWh';
+  const STRIPE_PRICE_ID = 'price_1R9GKuLNqUBmFOXgS7n0kZBU';
 
   const fetchSubscriptionData = async () => {
     setLoading(true);

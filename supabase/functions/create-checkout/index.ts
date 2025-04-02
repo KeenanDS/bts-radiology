@@ -51,7 +51,7 @@ serve(async (req) => {
       }
 
       // Parse request body
-      const { priceId = 'price_1R8VpILNqUBmFOXgw0XXjXWh', successUrl, cancelUrl } = await req.json();
+      const { priceId = 'price_1R9GKuLNqUBmFOXgS7n0kZBU', successUrl, cancelUrl } = await req.json();
 
       console.log(`Creating checkout session for user ${user.id} with price ${priceId}`);
 
