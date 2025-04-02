@@ -3,7 +3,7 @@ import { fetchWithRetry } from "./utils.ts";
 import { createNewsSearchPrompt, JSON_CONVERSION_SYSTEM_PROMPT } from "./prompts.ts";
 
 // Function to collect news stories in raw text format from Perplexity with dynamic time window
-export async function collectNewsStoriesRaw(daysBack = 7) {
+export async function collectNewsStoriesRaw(daysBack = 13) {
   try {
     const perplexityApiKey = Deno.env.get("PERPLEXITY_API_KEY");
     console.log(`Preparing Perplexity API request for news stories from past ${daysBack} days using sonar-reasoning-pro model`);

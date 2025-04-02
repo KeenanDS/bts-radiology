@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import PodcastHistoryItem from "./PodcastHistoryItem";
 import { useToast } from "@/hooks/use-toast";
+import { ensurePodcastAudioBucket } from "@/utils/ensureStorageBuckets";
 
 export interface PodcastEpisode {
   id: string;
@@ -28,6 +29,8 @@ const PodcastHistory = () => {
   const { toast } = useToast();
 
   useEffect(() => {
+    // Ensure the podcast_audio bucket exists when the component mounts
+    ensurePodcastAudioBucket();
     fetchPodcastEpisodes();
   }, []);
 
@@ -90,7 +93,7 @@ const PodcastHistory = () => {
         </CardHeader>
         <CardContent>
           <div className="text-center py-10 text-gray-400">
-            <p>No podcast episodes found. Generate your first podcast to see it here.</p>
+            <p>No podcast episodes found. Generate your first podcast or upload an audio file to see it here.</p>
           </div>
         </CardContent>
       </Card>
@@ -102,7 +105,7 @@ const PodcastHistory = () => {
       <CardHeader>
         <CardTitle className="text-white text-xl">Podcast History</CardTitle>
         <CardDescription className="text-gray-400">
-          Your generated podcast episodes
+          Your podcast episodes
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

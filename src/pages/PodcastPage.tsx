@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { 
   CalendarIcon, 
@@ -17,7 +19,11 @@ import {
   History,
   AlertCircle,
   RefreshCw,
-  Clock
+  Clock,
+  Upload,
+  Edit2,
+  Save,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +31,8 @@ import Sidebar from "@/components/admin/Sidebar";
 import { supabase } from "@/integrations/supabase/client";
 import AudioPlayer from "@/components/AudioPlayer";
 import PodcastHistory from "@/components/podcast/PodcastHistory";
+import UploadPodcastDialog from "@/components/podcast/UploadPodcastDialog";
+import { Layout } from "@/components/admin/Layout";
 
 interface PodcastGenerationResult {
   success: boolean;
@@ -71,6 +79,10 @@ const PodcastPage = () => {
   const [retryCount, setRetryCount] = useState(0);
   const [expandedTimeWindow, setExpandedTimeWindow] = useState(false);
   const [backgroundMusicUrl, setBackgroundMusicUrl] = useState<string | null>(null);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [isEditingScript, setIsEditingScript] = useState(false);
+  const [editedScript, setEditedScript] = useState<string | null>(null);
+  const [isSavingScript, setIsSavingScript] = useState(false);
   const { toast } = useToast();
 
   const handleGeneratePodcast = async () => {
@@ -240,6 +252,8 @@ const PodcastPage = () => {
       
       if (data) {
         setFullScript(data.podcast_script);
+        setEditedScript(null); // Reset edited script when fetching new script
+        setIsEditingScript(false); // Exit edit mode when fetching new script
         
         if (data.processed_audio_url) {
           setAudioUrl(data.processed_audio_url);
@@ -267,6 +281,51 @@ const PodcastPage = () => {
       });
     } finally {
       setIsFetchingFullScript(false);
+    }
+  };
+
+  const handleEditScript = () => {
+    setEditedScript(fullScript);
+    setIsEditingScript(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditedScript(null);
+    setIsEditingScript(false);
+  };
+
+  const handleSaveScript = async () => {
+    if (!currentEpisodeId || !editedScript) return;
+    
+    setIsSavingScript(true);
+    
+    try {
+      const { error } = await supabase
+        .from("podcast_episodes")
+        .update({ podcast_script: editedScript })
+        .eq("id", currentEpisodeId);
+      
+      if (error) {
+        console.error("Error saving script:", error);
+        throw error;
+      }
+      
+      setFullScript(editedScript);
+      setIsEditingScript(false);
+      
+      toast({
+        title: "Success",
+        description: "Podcast script updated successfully",
+      });
+    } catch (error) {
+      console.error("Error saving script:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save the podcast script",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingScript(false);
     }
   };
 
@@ -341,9 +400,7 @@ const PodcastPage = () => {
   }, [currentEpisodeId]);
 
   return (
-    <div className="min-h-screen flex bg-[#0a0b17]">
-      <Sidebar />
-      
+    <Layout>
       <div className="flex-1 p-6 bg-gradient-to-br from-[#0a0b17] via-[#111936] to-[#0a0b17] overflow-auto">
         <div className="max-w-5xl mx-auto space-y-8">
           <div>
@@ -385,12 +442,22 @@ const PodcastPage = () => {
               )}
 
               <Card className="bg-[#111936] border-[#2a2f4d] shadow-lg shadow-[#0a0b17]/50">
-                <CardHeader>
-                  <CardTitle className="text-white text-2xl">Generate a New Podcast Episode</CardTitle>
-                  <CardDescription className="text-gray-400">
-                    Set a date for your podcast and our AI will collect recent radiology news stories 
-                    and generate a podcast script
-                  </CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-white text-2xl">Generate a New Podcast Episode</CardTitle>
+                    <CardDescription className="text-gray-400">
+                      Set a date for your podcast and our AI will collect recent radiology news stories 
+                      and generate a podcast script
+                    </CardDescription>
+                  </div>
+                  <Button
+                    onClick={() => setUploadDialogOpen(true)}
+                    variant="outline"
+                    className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Audio
+                  </Button>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="space-y-2">
@@ -592,10 +659,53 @@ const PodcastPage = () => {
                                   )}
                                 </Button>
                               )}
+                              
+                              {fullScript && !isEditingScript && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={handleEditScript}
+                                  className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
+                                >
+                                  <Edit2 className="mr-2 h-4 w-4" />
+                                  Edit Script
+                                </Button>
+                              )}
                             </div>
                           </div>
                           <div className="p-4 bg-[#1a1f3d] rounded-lg max-h-[600px] overflow-y-auto">
-                            {fullScript ? (
+                            {isEditingScript ? (
+                              <div className="space-y-4">
+                                <Textarea
+                                  value={editedScript || ""}
+                                  onChange={(e) => setEditedScript(e.target.value)}
+                                  className="min-h-[400px] w-full bg-[#111936] border-[#2a2f4d] text-white"
+                                  placeholder="Edit your podcast script here..."
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <Button 
+                                    variant="outline" 
+                                    onClick={handleCancelEdit}
+                                    className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
+                                  >
+                                    <X className="mr-2 h-4 w-4" />
+                                    Cancel
+                                  </Button>
+                                  <Button 
+                                    onClick={handleSaveScript}
+                                    disabled={isSavingScript}
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                  >
+                                    {isSavingScript ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Save className="mr-2 h-4 w-4" />
+                                    )}
+                                    Save Changes
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : fullScript ? (
                               <p className="text-gray-300 whitespace-pre-line">{fullScript}</p>
                             ) : (
                               <>
@@ -673,7 +783,21 @@ const PodcastPage = () => {
           </Tabs>
         </div>
       </div>
-    </div>
+      
+      <UploadPodcastDialog 
+        open={uploadDialogOpen} 
+        onOpenChange={setUploadDialogOpen} 
+        onSuccess={() => {
+          const historyTab = document.querySelector('[data-state="active"][value="history"]');
+          if (!historyTab) {
+            const historyTrigger = document.querySelector('[value="history"]');
+            if (historyTrigger) {
+              (historyTrigger as HTMLElement).click();
+            }
+          }
+        }} 
+      />
+    </Layout>
   );
 };
 

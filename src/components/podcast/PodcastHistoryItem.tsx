@@ -1,549 +1,291 @@
-import { useState, useRef, useEffect } from "react";
-import { format } from "date-fns";
-import { 
-  Download, 
-  ChevronDown, 
-  ChevronUp, 
-  FileText, 
-  Calendar, 
-  Music,
-  Check,
-  Clock,
-  Trash2,
-  Star,
-  Loader2
-} from "lucide-react";
+
+import React, { useState } from "react";
+import { AlertCircle, Check, Download, ExternalLink, Loader2, MoreVertical, Music, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PodcastEpisode } from "./PodcastHistory";
-import AudioPlayer from "@/components/AudioPlayer";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Card, CardContent } from "@/components/ui/card";
+import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { PodcastEpisode } from "./PodcastHistory";
 
 interface PodcastHistoryItemProps {
   episode: PodcastEpisode;
   onDelete: (id: string) => void;
   onSetFeatured: (id: string) => void;
-  onRefresh?: () => void;
+  onRefresh: () => void;
 }
 
-const PodcastHistoryItem = ({ episode, onDelete, onSetFeatured, onRefresh }: PodcastHistoryItemProps) => {
-  const [isOpen, setIsOpen] = useState(false);
+const PodcastHistoryItem: React.FC<PodcastHistoryItemProps> = ({ 
+  episode, 
+  onDelete, 
+  onSetFeatured,
+  onRefresh
+}) => {
+  const [isProcessing, setIsProcessing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isSettingFeatured, setIsSettingFeatured] = useState(false);
-  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
-  const [isProcessingAudio, setIsProcessingAudio] = useState(false);
+  const [isFeaturingPodcast, setIsFeaturingPodcast] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { toast } = useToast();
-  
+
   const formatDate = (dateString: string) => {
     try {
-      return format(new Date(dateString), "PPP");
+      return format(new Date(dateString), "MMM d, yyyy");
     } catch (e) {
-      return "Invalid date";
-    }
-  };
-  
-  const getStatusBadge = () => {
-    switch (episode.status) {
-      case "completed":
-        return (
-          <div className="flex items-center text-green-400 text-xs font-medium">
-            <Check className="h-3 w-3 mr-1" />
-            Completed
-          </div>
-        );
-      case "generating_audio":
-        return (
-          <div className="flex items-center text-yellow-400 text-xs font-medium">
-            <Clock className="h-3 w-3 mr-1 animate-pulse" />
-            Processing Audio
-          </div>
-        );
-      default:
-        return (
-          <div className="flex items-center text-blue-400 text-xs font-medium">
-            <Clock className="h-3 w-3 mr-1" />
-            {episode.status || "Pending"}
-          </div>
-        );
+      return dateString;
     }
   };
 
-  const getAudioProcessingStatus = () => {
-    if (!episode.audio_processing_status) return null;
+  const handleDownload = () => {
+    const audioUrl = episode.processed_audio_url || episode.audio_url;
+    if (!audioUrl) return;
     
-    switch (episode.audio_processing_status) {
-      case "processing":
-        return (
-          <div className="flex items-center text-yellow-400 text-xs font-medium">
-            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-            Processing with Dolby.io
-          </div>
-        );
-      case "completed":
-        return (
-          <div className="flex items-center text-green-400 text-xs font-medium">
-            <Check className="h-3 w-3 mr-1" />
-            Enhanced with Dolby.io
-          </div>
-        );
-      case "error":
-        return (
-          <div className="flex items-center text-red-400 text-xs font-medium" title={episode.audio_processing_error || "Error processing audio"}>
-            <Clock className="h-3 w-3 mr-1" />
-            Error processing audio
-          </div>
-        );
-      default:
-        return null;
-    }
+    const link = document.createElement('a');
+    link.href = audioUrl;
+    link.download = `podcast_${episode.id}.mp3`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  const handleDeleteEpisode = async () => {
+  const handleDelete = async () => {
     try {
       setIsDeleting(true);
       
+      // Delete the episode from the database
       const { error } = await supabase
         .from("podcast_episodes")
         .delete()
         .eq("id", episode.id);
-        
+
       if (error) throw error;
       
       toast({
-        title: "Success",
-        description: "Episode deleted successfully",
+        title: "Podcast deleted",
+        description: "The podcast episode has been successfully deleted",
       });
       
       onDelete(episode.id);
+      
     } catch (error) {
-      console.error("Error deleting podcast episode:", error);
+      console.error("Error deleting podcast:", error);
       toast({
         title: "Error",
-        description: "Failed to delete episode",
+        description: "Failed to delete podcast episode",
         variant: "destructive",
       });
     } finally {
       setIsDeleting(false);
+      setShowDeleteConfirm(false);
     }
   };
 
   const handleSetFeatured = async () => {
-    if (episode.status !== "completed" || !episode.audio_url) {
-      toast({
-        title: "Cannot set as featured",
-        description: "Only completed episodes with audio can be featured",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
-      setIsSettingFeatured(true);
+      setIsFeaturingPodcast(true);
       
       const { error } = await supabase
         .from("podcast_episodes")
         .update({ is_featured: true })
         .eq("id", episode.id);
-        
+
       if (error) throw error;
       
       toast({
-        title: "Success",
-        description: "Episode set as featured on homepage",
+        title: "Featured podcast updated",
+        description: "This podcast is now featured on the home page",
       });
       
       onSetFeatured(episode.id);
-    } catch (error) {
-      console.error("Error setting episode as featured:", error);
-      toast({
-        title: "Error",
-        description: "Failed to set episode as featured",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSettingFeatured(false);
-    }
-  };
-
-  const handleProcessAudio = async () => {
-    if (!episode.id) {
-      toast({
-        title: "Error",
-        description: "Episode ID is missing",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!episode.audio_url) {
-      toast({
-        title: "Error",
-        description: "Episode needs to have audio generated first",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsProcessingAudio(true);
-    
-    try {
-      toast({
-        title: "Processing Audio",
-        description: "Enhancing podcast audio with Dolby.io. This may take a few minutes...",
-      });
-
-      const { data, error } = await supabase.functions.invoke(
-        "process-podcast-audio",
-        {
-          body: { episodeId: episode.id },
-        }
-      );
-
-      if (error) {
-        throw error;
-      }
-
-      if (!data || !data.success) {
-        throw new Error(data?.error || "Failed to process podcast audio");
-      }
-
-      toast({
-        title: "Success",
-        description: "Podcast audio enhanced with Dolby.io!",
-      });
       
-      if (onRefresh) {
-        onRefresh();
-      }
     } catch (error) {
-      console.error("Error processing podcast audio:", error);
+      console.error("Error featuring podcast:", error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to process podcast audio",
+        description: "Failed to feature podcast episode",
         variant: "destructive",
       });
     } finally {
-      setIsProcessingAudio(false);
+      setIsFeaturingPodcast(false);
     }
   };
 
-  const handleDownloadAudio = () => {
-    if (!episode.audio_url) return;
-    
-    const link = document.createElement('a');
-    link.href = episode.audio_url;
-    link.download = `podcast_episode_${episode.id}.mp3`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const statusColor = {
+    pending: "bg-yellow-500/20 text-yellow-300",
+    completed: "bg-green-500/20 text-green-300",
+    error: "bg-red-500/20 text-red-300",
+    generating_audio: "bg-blue-500/20 text-blue-300",
+    processing_audio: "bg-purple-500/20 text-purple-300",
   };
-
-  const handleDownloadProcessedAudio = () => {
-    if (!episode.processed_audio_url) return;
-    
-    const link = document.createElement('a');
-    link.href = episode.processed_audio_url;
-    link.download = `podcast_episode_${episode.id}_with_music.mp3`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleGenerateAudio = async () => {
-    if (!episode.id) {
-      toast({
-        title: "Error",
-        description: "Episode ID is missing",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsGeneratingAudio(true);
-    
-    try {
-      toast({
-        title: "Generating Audio",
-        description: "Converting podcast script to audio. This may take a few minutes...",
-      });
-
-      const { data, error } = await supabase.functions.invoke(
-        "generate-podcast-audio",
-        {
-          body: { episodeId: episode.id },
-        }
-      );
-
-      if (error) {
-        throw error;
-      }
-
-      if (!data || !data.success) {
-        throw new Error(data?.error || "Failed to generate podcast audio");
-      }
-
-      toast({
-        title: "Success",
-        description: "Podcast audio generated successfully!",
-      });
-      
-      if (onRefresh) {
-        onRefresh();
-      }
-    } catch (error) {
-      console.error("Error generating podcast audio:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to generate podcast audio",
-        variant: "destructive",
-      });
-    } finally {
-      setIsGeneratingAudio(false);
-    }
-  };
-
-  const scriptPreview = episode.podcast_script 
-    ? episode.podcast_script.slice(0, 150) + (episode.podcast_script.length > 150 ? "..." : "")
-    : "No script available";
-
-  const canGenerateAudio = episode.podcast_script && 
-                          !episode.audio_url && 
-                          episode.status === "completed";
-                          
-  const canProcessAudio = episode.audio_url && 
-                         (!episode.processed_audio_url && !episode.audio_processing_status || 
-                          episode.audio_processing_status === "error");
-                          
-  const episodeTitle = episode.custom_title || `Episode ${formatDate(episode.scheduled_for)}`;
 
   return (
-    <Collapsible 
-      open={isOpen} 
-      onOpenChange={setIsOpen} 
-      className="border border-[#2a2f4d] rounded-lg overflow-hidden bg-[#1a1f3d]"
-    >
-      <div className="p-4">
-        <div className="flex justify-between items-center">
-          <div className="flex flex-col">
-            <div className="text-white font-medium">
-              {episodeTitle}
-              {episode.is_featured && (
-                <span className="ml-2 text-yellow-400 text-xs font-medium">
-                  ★ Featured
-                </span>
-              )}
-            </div>
-            <div className="flex items-center text-gray-400 text-xs mt-1">
-              <Calendar className="h-3 w-3 mr-1" />
-              {formatDate(episode.created_at)}
-              <span className="mx-2">•</span>
-              {getStatusBadge()}
-              {getAudioProcessingStatus() && (
-                <>
-                  <span className="mx-2">•</span>
-                  {getAudioProcessingStatus()}
-                </>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {episode.processed_audio_url ? (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
-                onClick={handleDownloadProcessedAudio}
-                title="Download podcast with background music"
-              >
-                <Download className="h-4 w-4" />
-              </Button>
-            ) : episode.audio_url && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
-                onClick={handleDownloadAudio}
-                title="Download raw podcast audio"
-              >
-                <Download className="h-4 w-4" />
-              </Button>
-            )}
-            
-            {episode.status === "completed" && episode.processed_audio_url && (
-              <Button 
-                variant="outline" 
-                size="sm"
-                className={`border-[#2a2f4d] ${episode.is_featured ? 'bg-yellow-900/30 text-yellow-400' : 'bg-[#1a1f3d] text-white'} hover:bg-[#2a2f5d]`}
-                onClick={handleSetFeatured}
-                disabled={isSettingFeatured}
-                title="Set as featured on homepage"
-              >
-                <Star className="h-4 w-4" />
-              </Button>
-            )}
-            
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-red-900/30 hover:text-red-400"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent className="bg-[#1a1f3d] border-[#2a2f4d] text-white">
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                  <AlertDialogDescription className="text-gray-400">
-                    This will permanently delete this podcast episode and cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel className="bg-[#111936] text-white border-[#2a2f4d] hover:bg-[#2a2f5d] hover:text-white">
-                    Cancel
-                  </AlertDialogCancel>
-                  <AlertDialogAction 
-                    onClick={handleDeleteEpisode}
-                    className="bg-red-900/30 text-red-400 hover:bg-red-800/50"
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? "Deleting..." : "Delete"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            
-            <CollapsibleTrigger asChild>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
-              >
-                {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </Button>
-            </CollapsibleTrigger>
-          </div>
-        </div>
-        
-        {!isOpen && (
-          <div className="mt-2 text-gray-300 text-sm">
-            {scriptPreview}
-          </div>
-        )}
-      </div>
-      
-      <CollapsibleContent>
-        <div className="px-4 pb-4 space-y-4">
-          {episode.processed_audio_url ? (
-            <div className="mt-4">
-              <div className="flex items-center text-gray-300 text-sm mb-2">
-                <Music className="h-4 w-4 mr-2" />
-                Enhanced Audio with Dolby.io
-              </div>
-              <AudioPlayer 
-                audioUrl={episode.processed_audio_url} 
-                title={episodeTitle + " (Enhanced)"}
-                subtitle="Beyond the Scan"
-                showDownload={true}
-              />
-            </div>
-          ) : episode.audio_url ? (
-            <div className="mt-4">
-              <div className="flex items-center text-gray-300 text-sm mb-2">
-                <Music className="h-4 w-4 mr-2" />
-                Raw Audio Playback
-              </div>
-              <AudioPlayer 
-                audioUrl={episode.audio_url} 
-                title={episodeTitle}
-                subtitle="Beyond the Scan"
-                showDownload={true}
-              />
-              
-              {canProcessAudio && (
-                <Button 
-                  onClick={handleProcessAudio}
-                  className="w-full mt-3 bg-gradient-to-r from-[#3a3f7d] to-[#6366f1] hover:from-[#4a4f8d] hover:to-[#7376ff] text-white"
-                  disabled={isProcessingAudio}
-                >
-                  {isProcessingAudio ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Enhancing Audio with Dolby.io...
-                    </>
-                  ) : (
-                    <>
-                      <Music className="mr-2 h-4 w-4" />
-                      Enhance with Dolby.io
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-          ) : canGenerateAudio && (
-            <div className="mt-4">
-              <div className="flex items-center text-gray-300 text-sm mb-2">
-                <Music className="h-4 w-4 mr-2" />
-                Generate Podcast Audio
-              </div>
-              <Button 
-                onClick={handleGenerateAudio}
-                className="w-full bg-gradient-to-r from-[#3a3f7d] to-[#6366f1] hover:from-[#4a4f8d] hover:to-[#7376ff] text-white"
-                disabled={isGeneratingAudio}
-              >
-                {isGeneratingAudio ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating Audio...
-                  </>
-                ) : (
-                  <>
-                    <Music className="mr-2 h-4 w-4" />
-                    Generate Podcast Audio
-                  </>
+    <>
+      <Card className="bg-[#1a1f3d] border-[#2a2f4d] overflow-hidden">
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="text-white font-medium truncate">
+                  {episode.custom_title || `Podcast Episode - ${formatDate(episode.scheduled_for)}`}
+                </h3>
+                {episode.is_featured && (
+                  <span className="flex items-center gap-1 text-xs bg-yellow-600/30 text-yellow-300 px-2 py-0.5 rounded-full">
+                    <Star className="h-3 w-3" />
+                    Featured
+                  </span>
                 )}
-              </Button>
+              </div>
+              
+              <div className="flex items-center gap-2 mt-1 text-sm text-gray-400">
+                <span>Created: {formatDate(episode.created_at)}</span>
+                <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor[episode.status as keyof typeof statusColor] || "bg-gray-500/20 text-gray-300"}`}>
+                  {episode.status.replace('_', ' ')}
+                </span>
+              </div>
+              
+              {/* Audio Player or Status */}
+              <div className="mt-3">
+                {episode.audio_url ? (
+                  <audio 
+                    controls 
+                    className="w-full h-8 text-white" 
+                    src={episode.processed_audio_url || episode.audio_url}
+                  >
+                    Your browser does not support the audio element.
+                  </audio>
+                ) : episode.status === 'generating_audio' ? (
+                  <div className="flex items-center gap-2 text-blue-300">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Generating audio...</span>
+                  </div>
+                ) : episode.status === 'error' ? (
+                  <div className="flex items-center gap-2 text-red-300">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Error generating podcast</span>
+                  </div>
+                ) : null}
+              </div>
             </div>
-          )}
-          
-          {episode.podcast_script && (
-            <div className="mt-4">
-              <div className="flex justify-between items-center text-gray-300 text-sm mb-2">
-                <div className="flex items-center">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Podcast Script
-                </div>
+            
+            <div className="flex items-start gap-2 sm:justify-end">
+              {(episode.processed_audio_url || episode.audio_url) && (
                 <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]"
-                  onClick={() => {
-                    if (!episode.podcast_script) return;
-                    
-                    const element = document.createElement("a");
-                    const file = new Blob([episode.podcast_script], {type: 'text/plain'});
-                    element.href = URL.createObjectURL(file);
-                    element.download = `podcast_script_${episode.id}.txt`;
-                    document.body.appendChild(element);
-                    element.click();
-                    document.body.removeChild(element);
-                  }}
+                  size="sm"
+                  variant="outline"
+                  className="border-[#2a2f4d] bg-[#111936] text-white hover:bg-[#2a2f5d]"
+                  onClick={handleDownload}
                 >
-                  <Download className="h-4 w-4 mr-1" />
-                  Script
+                  <Download className="h-4 w-4" />
+                  <span className="sr-only sm:not-sr-only sm:ml-2">Download</span>
                 </Button>
-              </div>
-              <div className="p-4 bg-[#111936] rounded-lg max-h-[400px] overflow-y-auto text-gray-300 text-sm whitespace-pre-line">
-                {episode.podcast_script}
-              </div>
+              )}
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    size="sm"
+                    variant="outline"
+                    className="border-[#2a2f4d] bg-[#111936] text-white hover:bg-[#2a2f5d]"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="bg-[#1a1f3d] border-[#2a2f4d] text-white w-56">
+                  <DropdownMenuGroup>
+                    {!episode.is_featured && (
+                      <DropdownMenuItem 
+                        onClick={handleSetFeatured}
+                        disabled={isFeaturingPodcast}
+                        className="text-white hover:bg-[#2a2f5d] cursor-pointer"
+                      >
+                        {isFeaturingPodcast ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Star className="mr-2 h-4 w-4" />
+                        )}
+                        <span>Set as Featured</span>
+                      </DropdownMenuItem>
+                    )}
+                    
+                    {episode.podcast_script && (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const element = document.createElement("a");
+                          const file = new Blob([episode.podcast_script!], {type: 'text/plain'});
+                          element.href = URL.createObjectURL(file);
+                          element.download = `podcast_script_${episode.id}.txt`;
+                          document.body.appendChild(element);
+                          element.click();
+                          document.body.removeChild(element);
+                        }}
+                        className="text-white hover:bg-[#2a2f5d] cursor-pointer"
+                      >
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        <span>Export Script</span>
+                      </DropdownMenuItem>
+                    )}
+                    
+                    <DropdownMenuItem 
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="text-red-400 hover:bg-red-950/30 hover:text-red-300 cursor-pointer"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      <span>Delete Podcast</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-          )}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+          </div>
+        </CardContent>
+      </Card>
+      
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent className="bg-[#111936] border-[#2a2f4d] text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              This will permanently delete this podcast episode and any associated audio files.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-[#2a2f4d] bg-[#1a1f3d] text-white hover:bg-[#2a2f5d]">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
 
