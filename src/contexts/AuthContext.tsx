@@ -118,6 +118,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         description: "Welcome back!",
       });
       
+      navigate('/admin');
+      
     } catch (error: any) {
       console.error("Error signing in:", error);
       toast({

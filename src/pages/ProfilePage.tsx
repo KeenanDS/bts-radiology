@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/admin/Sidebar';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { User, Upload, Loader } from 'lucide-react';
 
-// Define type for profile data
 interface ProfileData {
   full_name: string;
   email: string;
@@ -55,7 +53,6 @@ const ProfilePage = () => {
         return;
       }
       
-      // Only set profile data if we have valid data
       if (data) {
         setProfileData({
           full_name: data.full_name || '',
@@ -88,7 +85,6 @@ const ProfilePage = () => {
     try {
       setLoading(true);
       
-      // Only update the fields that we're allowing the user to change
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -130,19 +126,16 @@ const ProfilePage = () => {
       
       setUploading(true);
       
-      // Upload file to storage
       const { error: uploadError } = await supabase.storage
         .from('profile_images')
         .upload(filePath, file);
       
       if (uploadError) throw uploadError;
       
-      // Get public URL
       const { data } = supabase.storage
         .from('profile_images')
         .getPublicUrl(filePath);
       
-      // Update profile with new avatar URL
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ avatar_url: data.publicUrl })
@@ -150,7 +143,6 @@ const ProfilePage = () => {
       
       if (updateError) throw updateError;
       
-      // Update local state
       setProfileData(prev => ({
         ...prev,
         avatar_url: data.publicUrl
@@ -178,7 +170,6 @@ const ProfilePage = () => {
     try {
       setLoading(true);
       
-      // Update profile to remove avatar URL
       const { error } = await supabase
         .from('profiles')
         .update({ avatar_url: null })
@@ -186,7 +177,6 @@ const ProfilePage = () => {
       
       if (error) throw error;
       
-      // Update local state
       setProfileData(prev => ({
         ...prev,
         avatar_url: null
@@ -264,7 +254,7 @@ const ProfilePage = () => {
                       />
                       <Button 
                         variant="outline" 
-                        className="text-white" 
+                        className="text-gray-900 bg-white/80 hover:bg-white" 
                         onClick={handleRemoveAvatar}
                         disabled={uploading || !profileData.avatar_url}
                       >
