@@ -68,3 +68,7 @@ enable_confirmations = false
 # Configure Edge Functions
 [functions]
 port = 54321
+
+# For functions.invite-user
+[functions.invite-user]
+verify_jwt = true

@@ -41,8 +41,10 @@ const UserInviteForm = ({ onSuccess, onCancel }: UserInviteFormProps) => {
   const inviteNewUser = async (values: NewUserFormValues) => {
     setCreatingUser(true);
     try {
-      // Call the edge function instead of directly using Supabase client
-      const response = await supabase.functions.invoke('invite-user', {
+      console.log('Calling invite-user function with:', values);
+      
+      // Call the edge function to invite the user
+      const { data, error } = await supabase.functions.invoke('invite-user', {
         body: {
           email: values.email,
           fullName: values.fullName,
@@ -50,7 +52,9 @@ const UserInviteForm = ({ onSuccess, onCancel }: UserInviteFormProps) => {
         }
       });
 
-      if (response.error) throw new Error(response.error.message);
+      console.log('Response from invite-user function:', { data, error });
+
+      if (error) throw new Error(error.message);
 
       toast({
         title: 'Invitation sent',
@@ -126,6 +130,9 @@ const UserInviteForm = ({ onSuccess, onCancel }: UserInviteFormProps) => {
         />
 
         <DialogFooter>
+          <Button type="button" variant="outline" onClick={onCancel} className="mr-2">
+            Cancel
+          </Button>
           <Button type="submit" disabled={creatingUser}>
             {creatingUser ? (
               <>
