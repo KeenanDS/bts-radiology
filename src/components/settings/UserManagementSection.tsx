@@ -27,7 +27,6 @@ interface UserProfile {
 const newUserSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
   role: z.enum(['administrator', 'owner', 'global_administrator'])
 });
 
@@ -46,7 +45,6 @@ const UserManagementSection = () => {
     defaultValues: {
       email: '',
       fullName: '',
-      password: '',
       role: 'administrator'
     }
   });
@@ -104,42 +102,32 @@ const UserManagementSection = () => {
     }
   };
 
-  const createNewUser = async (values: NewUserFormValues) => {
+  const inviteNewUser = async (values: NewUserFormValues) => {
     setCreatingUser(true);
     try {
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: values.email,
-        password: values.password,
-        email_confirm: true
+      // Invite user via email instead of directly creating an account
+      const { data, error } = await supabase.auth.admin.inviteUserByEmail(values.email, {
+        data: {
+          full_name: values.fullName,
+          role: values.role
+        }
       });
 
-      if (authError) throw authError;
-
-      if (authData.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            full_name: values.fullName,
-            role: values.role as UserRoleOption
-          })
-          .eq('id', authData.user.id);
-
-        if (profileError) throw profileError;
-      }
+      if (error) throw error;
 
       toast({
-        title: 'Success',
-        description: `User ${values.email} created successfully`
+        title: 'Invitation sent',
+        description: `An invitation has been sent to ${values.email}`
       });
 
       form.reset();
       setInviteDialogOpen(false);
       await fetchUsers();
     } catch (error: any) {
-      console.error('Error creating user:', error);
+      console.error('Error inviting user:', error);
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create user',
+        description: error.message || 'Failed to send invitation',
         variant: 'destructive'
       });
     } finally {
@@ -179,14 +167,14 @@ const UserManagementSection = () => {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create New User</DialogTitle>
+                <DialogTitle>Invite New User</DialogTitle>
                 <DialogDescription>
-                  Add a new administrator to the platform.
+                  Send an invitation email to add a new administrator to the platform.
                 </DialogDescription>
               </DialogHeader>
 
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(createNewUser)} className="space-y-4">
+                <form onSubmit={form.handleSubmit(inviteNewUser)} className="space-y-4">
                   <FormField
                     control={form.control}
                     name="email"
@@ -209,20 +197,6 @@ const UserManagementSection = () => {
                         <FormLabel>Full Name</FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="John Doe" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Password</FormLabel>
-                        <FormControl>
-                          <Input {...field} type="password" placeholder="••••••••" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -257,9 +231,9 @@ const UserManagementSection = () => {
                       {creatingUser ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Creating...
+                          Sending Invitation...
                         </>
-                      ) : 'Create User'}
+                      ) : 'Send Invitation'}
                     </Button>
                   </DialogFooter>
                 </form>
