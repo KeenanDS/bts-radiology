@@ -41,15 +41,16 @@ const UserInviteForm = ({ onSuccess, onCancel }: UserInviteFormProps) => {
   const inviteNewUser = async (values: NewUserFormValues) => {
     setCreatingUser(true);
     try {
-      // Invite user via email
-      const { data, error } = await supabase.auth.admin.inviteUserByEmail(values.email, {
-        data: {
-          full_name: values.fullName,
+      // Call the edge function instead of directly using Supabase client
+      const response = await supabase.functions.invoke('invite-user', {
+        body: {
+          email: values.email,
+          fullName: values.fullName,
           role: values.role
         }
       });
 
-      if (error) throw error;
+      if (response.error) throw new Error(response.error.message);
 
       toast({
         title: 'Invitation sent',
