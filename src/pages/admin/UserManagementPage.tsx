@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -29,6 +28,7 @@ interface UserProfile {
 const newUserSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
   role: z.enum(['administrator', 'owner', 'global_administrator']),
 });
 
@@ -47,6 +47,7 @@ const UserManagementPage = () => {
     defaultValues: {
       email: '',
       fullName: '',
+      password: '',
       role: 'administrator',
     },
   });
@@ -106,22 +107,32 @@ const UserManagementPage = () => {
     }
   };
 
-  const inviteNewUser = async (values: NewUserFormValues) => {
+  const createNewUser = async (values: NewUserFormValues) => {
     setCreatingUser(true);
     try {
-      // Invite user via email instead of directly creating an account
-      const { data, error } = await supabase.auth.admin.inviteUserByEmail(values.email, {
-        data: {
-          full_name: values.fullName,
-          role: values.role
-        }
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: values.email,
+        password: values.password,
+        email_confirm: true,
       });
 
-      if (error) throw error;
+      if (authError) throw authError;
+
+      if (authData.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ 
+            full_name: values.fullName,
+            role: values.role as UserRoleOption
+          })
+          .eq('id', authData.user.id);
+
+        if (profileError) throw profileError;
+      }
 
       toast({
-        title: 'Invitation sent',
-        description: `An invitation has been sent to ${values.email}`,
+        title: 'Success',
+        description: `User ${values.email} created successfully`,
       });
 
       form.reset();
@@ -129,10 +140,10 @@ const UserManagementPage = () => {
       
       await fetchUsers();
     } catch (error: any) {
-      console.error('Error inviting user:', error);
+      console.error('Error creating user:', error);
       toast({
         title: 'Error',
-        description: error.message || 'Failed to send invitation',
+        description: error.message || 'Failed to create user',
         variant: 'destructive',
       });
     } finally {
@@ -176,13 +187,13 @@ const UserManagementPage = () => {
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Invite New User</DialogTitle>
+                      <DialogTitle>Create New User</DialogTitle>
                       <DialogDescription>
-                        Send an invitation email to add a new administrator to the platform.
+                        Add a new administrator to the platform.
                       </DialogDescription>
                     </DialogHeader>
                     <Form {...form}>
-                      <form onSubmit={form.handleSubmit(inviteNewUser)} className="space-y-4">
+                      <form onSubmit={form.handleSubmit(createNewUser)} className="space-y-4">
                         <FormField
                           control={form.control}
                           name="email"
@@ -204,6 +215,19 @@ const UserManagementPage = () => {
                               <FormLabel>Full Name</FormLabel>
                               <FormControl>
                                 <Input {...field} placeholder="John Doe" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="password"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Password</FormLabel>
+                              <FormControl>
+                                <Input {...field} type="password" placeholder="••••••••" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -239,10 +263,10 @@ const UserManagementPage = () => {
                             {creatingUser ? (
                               <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Sending Invitation...
+                                Creating...
                               </>
                             ) : (
-                              'Send Invitation'
+                              'Create User'
                             )}
                           </Button>
                         </DialogFooter>
