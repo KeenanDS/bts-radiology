@@ -43,7 +43,7 @@ const UserInviteForm = ({ onSuccess, onCancel }: UserInviteFormProps) => {
     try {
       console.log('Calling invite-user function with:', values);
       
-      // Call the edge function to invite the user
+      // Call the edge function with the full URL
       const { data, error } = await supabase.functions.invoke('invite-user', {
         body: {
           email: values.email,
@@ -54,7 +54,7 @@ const UserInviteForm = ({ onSuccess, onCancel }: UserInviteFormProps) => {
 
       console.log('Response from invite-user function:', { data, error });
 
-      if (error) throw new Error(error.message);
+      if (error) throw error;
 
       toast({
         title: 'Invitation sent',

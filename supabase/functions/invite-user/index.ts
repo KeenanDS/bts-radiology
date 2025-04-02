@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
 
+// Get environment variables
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
@@ -15,6 +16,9 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Add CORS headers to all responses
+  const headers = { ...corsHeaders, 'Content-Type': 'application/json' };
+
   try {
     // Parse request body
     const { email, fullName, role } = await req.json();
@@ -25,7 +29,7 @@ serve(async (req) => {
     if (!email || !role) {
       return new Response(
         JSON.stringify({ error: 'Email and role are required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers }
       );
     }
 
@@ -41,7 +45,7 @@ serve(async (req) => {
       console.error('Error inviting user:', error);
       return new Response(
         JSON.stringify({ error: error.message }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers }
       );
     }
 
@@ -49,13 +53,13 @@ serve(async (req) => {
     
     return new Response(
       JSON.stringify({ success: true, data }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers }
     );
   } catch (error) {
     console.error('Error in invite-user function:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers }
     );
   }
 });
