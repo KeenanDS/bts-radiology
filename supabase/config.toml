@@ -2,7 +2,6 @@
 # A string used to distinguish different Supabase projects on the same host. Defaults to the working
 # directory name when running `supabase init`.
 project_id = "gbypnkiziennhzqbhqtr"
-organization_id = "ogbypnkiziennhzqbhqtr"
 
 [api]
 # Port to use for the API URL.
@@ -68,5 +67,4 @@ enable_confirmations = false
 
 # Configure Edge Functions
 [functions]
-# Port to use for Edge Functions.
 port = 54321
